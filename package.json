@@ -2,6 +2,9 @@
   "name": "asistencia-escolar",
   "type": "module",
   "version": "0.1.0",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
