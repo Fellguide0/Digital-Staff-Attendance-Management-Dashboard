@@ -1,0 +1,306 @@
+---
+// src/pages/dashboard/index.astro
+import { supabase } from "../../lib/supabase";
+
+// Opciones de fecha para el header
+const hoy = new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+
+const inicioDia = new Date();
+inicioDia.setHours(0, 0, 0, 0);
+
+// Traer registros de hoy (solo entradas)
+const { data: registrosHoy } = await supabase
+  .from('registros')
+  .select('profesor_id, es_tardanza')
+  .eq('tipo', 'entrada')
+  .gte('timestamp', inicioDia.toISOString());
+
+const presentesHoy = registrosHoy?.length || 0;
+const tardanzasHoy = registrosHoy?.filter(r => r.es_tardanza).length || 0;
+
+// Traer total de profesores activos
+const { count: totalProfesores } = await supabase
+  .from('profesores')
+  .select('*', { count: 'exact', head: true })
+  .eq('activo', true);
+
+const ausentesHoy = (totalProfesores || 0) - presentesHoy;
+
+// Traer últimos movimientos para la tabla (SOLO DE HOY)
+const { data: movimientos } = await supabase
+  .from('registros')
+  .select(`
+    id, timestamp, tipo, es_tardanza, observaciones,
+    profesores ( nombre, grado_grupo )
+  `)
+  .gte('timestamp', inicioDia.toISOString()) // <-- ESTA LÍNEA ES LA MAGIA QUE LO LIMPIA DIARIO
+  .order('timestamp', { ascending: false })
+  .limit(15);
+---
+
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard — Zona 012</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      :root {
+        --verde: #1a4d2e; --verde-med: #2d7a4f; --blanco: #fafaf8; --gris: #6b7280;
+        --gris-claro: #f3f4f6; --texto: #1a1a1a; --naranja: #d97706; --rojo: #dc2626;
+        --azul: #2563eb;
+      }
+      body { font-family: 'DM Sans', sans-serif; background: var(--gris-claro); color: var(--texto); min-height: 100vh; }
+      
+      header { background: var(--verde); padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+      .header-izq { display: flex; flex-direction: column; gap: 0.15rem; }
+      .header-zona { font-size: 0.7rem; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 0.1em; }
+      .header-titulo { font-family: 'DM Serif Display', serif; font-size: 1.2rem; color: #fff; }
+      .header-der { display: flex; align-items: center; gap: 1rem; }
+      .header-fecha { font-size: 0.85rem; color: rgba(255,255,255,0.8); text-transform: capitalize; }
+      .btn-salir { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer; transition: background 0.2s; font-family: inherit; }
+      .btn-salir:hover { background: rgba(255,255,255,0.2); }
+
+      main { padding: 2rem; max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 2rem; }
+
+      .grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
+      .stat-card { background: #fff; border-radius: 14px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; flex-direction: column; gap: 0.5rem; }
+      .stat-card-link { text-decoration: none; color: inherit; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; }
+      .stat-card-link:hover { transform: translateY(-3px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+      .stat-card-label { font-size: 0.75rem; font-weight: 600; color: var(--gris); text-transform: uppercase; letter-spacing: 0.05em; }
+      .stat-card-num { font-family: 'DM Serif Display', serif; font-size: 2.5rem; line-height: 1; }
+      .stat-card-num.verde { color: var(--verde); }
+      .stat-card-num.naranja { color: var(--naranja); }
+      .stat-card-num.rojo { color: var(--rojo); }
+      .stat-card-sub { font-size: 0.85rem; color: var(--gris); }
+
+      .titulo-seccion { font-family: 'DM Serif Display', serif; font-size: 1.4rem; color: var(--texto); }
+      .tabla-card { background: #fff; border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: hidden; }
+      table { width: 100%; border-collapse: collapse; }
+      th { text-align: left; padding: 1rem 1.5rem; font-size: 0.75rem; font-weight: 600; color: var(--gris); text-transform: uppercase; letter-spacing: 0.07em; background: var(--gris-claro); border-bottom: 1px solid #e5e7eb; }
+      td { padding: 1rem 1.5rem; font-size: 0.9rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+      tr:last-child td { border-bottom: none; }
+      
+      .badge { padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 500; display: inline-flex; align-items: center; gap: 0.3rem; }
+      .badge-entrada { background: #dcfce7; color: #166534; }
+      .badge-salida { background: #f3f4f6; color: #374151; }
+      .badge-tardanza { background: #fef3c7; color: #92400e; }
+    </style>
+  </head>
+  <body>
+
+    <header>
+      <div class="header-izq">
+        <span class="header-zona">Panel de control · Zona 012</span>
+        <span class="header-titulo">Dashboard Directivo</span>
+      </div>
+      <div class="header-der">
+        <span class="header-fecha">{hoy}</span>
+        <a href="/dashboard/kiosko" style="background: var(--verde-med); color: white; text-decoration: none; padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.8rem; font-weight: 500; display: inline-flex; align-items: center; gap: 0.3rem;">
+          🖥️ Abrir Kiosko
+        </a>
+        <a href="/dashboard/configuracion" style="color: white; text-decoration: none; font-size: 1.2rem; margin: 0 0.2rem;" title="Configuración">⚙️</a>
+        <button id="btn-cerrar-sesion" class="btn-salir">Cerrar sesión</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- BOTÓN DE AGREGAR DOCENTE -->
+      <div style="display: flex; justify-content: flex-end; margin-bottom: -0.5rem;">
+        <a href="/dashboard/profesores" style="background: var(--verde); color: white; text-decoration: none; padding: 0.6rem 1.2rem; border-radius: 8px; font-size: 0.9rem; font-weight: 500; display: inline-flex; align-items: center; gap: 0.5rem; transition: transform 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+          👤 + Registrar Nuevo Docente
+        </a>
+      </div>
+
+      <!-- TARJETAS DE ESTADÍSTICAS -->
+      <div class="grid-stats">
+        <div class="stat-card">
+          <span class="stat-card-label">Presentes Hoy</span>
+          <span class="stat-card-num verde">{presentesHoy}</span>
+          <span class="stat-card-sub">de {totalProfesores} docentes</span>
+        </div>
+
+        <a href="/dashboard/tardanzas" class="stat-card stat-card-link">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span class="stat-card-label">Tardanzas</span>
+            <span style="font-size: 1.2rem; color: var(--naranja);">➔</span>
+          </div>
+          <span class="stat-card-num naranja">{tardanzasHoy}</span>
+          <span class="stat-card-sub">Ver y justificar</span>
+        </a>
+
+        <a href="/dashboard/ausentes" class="stat-card stat-card-link">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span class="stat-card-label">Ausentes</span>
+            <span style="font-size: 1.2rem; color: var(--rojo);">➔</span>
+          </div>
+          <span class="stat-card-num rojo">{ausentesHoy}</span>
+          <span class="stat-card-sub">Ver docentes faltantes</span>
+        </a>
+      </div>
+
+      <!-- TABLA DE MOVIMIENTOS Y BOTÓN EXPORTAR -->
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h2 class="titulo-seccion">Movimientos Recientes</h2>
+          <button id="btn-abrir-exportar" style="background: var(--verde); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 500; display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; transition: opacity 0.2s; font-family: inherit;">
+            📥 Exportar Reporte
+          </button>
+        </div>
+
+        <div class="tabla-card">
+          {movimientos && movimientos.length > 0 ? (
+            <table>
+              <thead>
+                <tr>
+                  <th>Hora</th>
+                  <th>Docente</th>
+                  <th>Grado/Grupo</th>
+                  <th>Movimiento</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {movimientos.map((m) => {
+                  const date = new Date(m.timestamp);
+                  return (
+                    <tr>
+                      <td style="color: var(--gris); font-weight: 500;">
+                        {date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td style="font-weight: 500;">{(m.profesores as any)?.nombre}</td>
+                      <td>{(m.profesores as any)?.grado_grupo || '—'}</td>
+                      <td>
+                        {m.tipo === 'entrada' 
+                          ? <span class="badge badge-entrada">Entrada</span> 
+                          : <span class="badge badge-salida">Salida</span>
+                        }
+                      </td>
+                      <td>
+                        {m.es_tardanza 
+                          ? <span class="badge badge-tardanza">⚠️ Tardanza</span>
+                          : <span style="color: var(--gris); font-size: 0.85rem;">✅ A tiempo</span>
+                        }
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <div style="padding: 3rem; text-align: center; color: var(--gris);">
+              No hay movimientos registrados aún.
+            </div>
+          )}
+        </div>
+      </div>
+    </main>
+
+    <!-- MODAL DE EXPORTACIÓN -->
+    <dialog id="modal-exportar" style="margin: auto; padding: 2rem; border-radius: 14px; border: none; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 400px;">
+      <h2 style="font-family: 'DM Serif Display', serif; font-size: 1.4rem; color: var(--verde); margin-bottom: 0.5rem;">Exportar Reporte</h2>
+      <p style="font-size: 0.9rem; color: var(--gris); margin-bottom: 1.5rem;">Selecciona el periodo que deseas descargar en formato Excel.</p>
+      
+      <form id="form-exportar" style="display: flex; flex-direction: column; gap: 1rem;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div>
+            <label style="font-size: 0.75rem; font-weight: 600; color: var(--gris); text-transform: uppercase;">Fecha Inicio</label>
+            <input type="date" id="fecha-inicio" required style="width: 100%; margin-top: 0.3rem; padding: 0.6rem; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit; font-size: 0.9rem;">
+          </div>
+          <div>
+            <label style="font-size: 0.75rem; font-weight: 600; color: var(--gris); text-transform: uppercase;">Fecha Fin</label>
+            <input type="date" id="fecha-fin" required style="width: 100%; margin-top: 0.3rem; padding: 0.6rem; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit; font-size: 0.9rem;">
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.8rem; margin-top: 1rem;">
+          <button type="submit" style="background: var(--verde); color: white; border: none; padding: 0.7rem; border-radius: 6px; cursor: pointer; font-weight: 500; font-family: inherit; font-size: 0.95rem;">
+            Descargar Periodo
+          </button>
+          
+          <div style="text-align: center; color: var(--gris); font-size: 0.8rem;">o también puedes</div>
+
+          <button type="button" id="btn-exportar-todo" style="background: transparent; border: 1px solid var(--verde); color: var(--verde); padding: 0.7rem; border-radius: 6px; cursor: pointer; font-weight: 500; font-family: inherit; font-size: 0.95rem; transition: background 0.2s;">
+            Descargar Todo el Historial
+          </button>
+        </div>
+      </form>
+      <button type="button" id="btn-cerrar-exportar" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; font-size: 1.2rem; cursor: pointer; color: var(--gris);">✖</button>
+    </dialog>
+
+    <script>
+      // 1. Cierre de sesión normal manual
+      document.getElementById("btn-cerrar-sesion")?.addEventListener("click", async () => {
+        if (window.Clerk) {
+          await window.Clerk.signOut();
+          window.location.href = "/";
+        }
+      });
+
+      // 2. Lógica del Modal de Exportación a Excel
+      const modalExportar = document.getElementById('modal-exportar') as HTMLDialogElement;
+      const formExportar = document.getElementById('form-exportar') as HTMLFormElement;
+
+      document.getElementById('btn-abrir-exportar')?.addEventListener('click', () => {
+        modalExportar.showModal();
+      });
+
+      document.getElementById('btn-cerrar-exportar')?.addEventListener('click', () => {
+        modalExportar.close();
+      });
+
+      formExportar?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const inicio = (document.getElementById('fecha-inicio') as HTMLInputElement).value;
+        const fin = (document.getElementById('fecha-fin') as HTMLInputElement).value;
+        
+        if (inicio && fin) {
+          if(inicio > fin) {
+            alert("⚠️ La fecha de inicio no puede ser mayor a la fecha de fin.");
+            return;
+          }
+          window.location.href = `/api/exportar?inicio=${inicio}&fin=${fin}`;
+          modalExportar.close();
+        }
+      });
+
+      document.getElementById('btn-exportar-todo')?.addEventListener('click', () => {
+        window.location.href = '/api/exportar';
+        modalExportar.close();
+      });
+
+      // ==========================================
+      // 3. Cierre de sesión por INACTIVIDAD (Nuevo)
+      // ==========================================
+      if (window.location.pathname !== '/dashboard/kiosko') {
+        let tiempoInactivo = 0;
+        const LIMITE_MINUTOS = 15; // Tiempo en minutos antes de cerrar sesión automáticamente
+
+        function resetearReloj() {
+          tiempoInactivo = 0;
+        }
+
+        // Detectar actividad del usuario
+        window.onload = resetearReloj;
+        window.onmousemove = resetearReloj;
+        window.onkeypress = resetearReloj;
+        window.ontouchstart = resetearReloj; // Para pantallas táctiles
+
+        // Cronómetro oculto
+        setInterval(async () => {
+          tiempoInactivo++;
+          
+          if (tiempoInactivo >= (LIMITE_MINUTOS * 60)) {
+            if (window.Clerk) {
+              console.log("Cerrando sesión por inactividad...");
+              await window.Clerk.signOut();
+              window.location.href = '/';
+            }
+          }
+        }, 1000);
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,312 @@
+---
+// Página principal — redirige según el rol del usuario
+import { SignIn, SignedIn, SignedOut } from "@clerk/astro/components";
+
+const { userId, sessionClaims } = Astro.locals.auth();
+
+// Si ya está autenticado, redirigir según su rol
+if (userId) {
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  if (role === "directora") {
+    return Astro.redirect("/dashboard");
+  } else {
+    return Astro.redirect("/scan");
+  }
+}
+---
+
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Asistencia Docente — Cadete Juan Escutia</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --verde:      #1a4d2e;
+        --verde-med:  #2d7a4f;
+        --verde-claro:#e8f5ee;
+        --dorado:     #c9a84c;
+        --blanco:     #fafaf8;
+        --gris:       #6b7280;
+        --texto:      #1a1a1a;
+      }
+
+      html, body {
+        height: 100%;
+        font-family: 'DM Sans', sans-serif;
+        background-color: var(--blanco);
+        color: var(--texto);
+      }
+
+      .layout {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      /* Panel izquierdo — identidad visual */
+      .panel-izq {
+        background-color: var(--verde);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 3rem;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .panel-izq::before {
+        content: '';
+        position: absolute;
+        top: -120px;
+        right: -120px;
+        width: 400px;
+        height: 400px;
+        border-radius: 50%;
+        background: rgba(201,168,76,0.08);
+        pointer-events: none;
+      }
+
+      .panel-izq::after {
+        content: '';
+        position: absolute;
+        bottom: -80px;
+        left: -80px;
+        width: 300px;
+        height: 300px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.04);
+        pointer-events: none;
+      }
+
+      /* Nuevo estilo para el logo real */
+      .logo-escuela {
+        width: 70px;
+        height: auto;
+        border-radius: 12px;
+        /* Un brillo sutil para que resalte sobre el fondo verde */
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15); 
+        background: #fff; /* Fondo blanco por si el logo es transparente */
+        padding: 4px;
+      }
+
+      .panel-izq-contenido {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 1.5rem;
+      }
+
+      .zona-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(201,168,76,0.15);
+        border: 1px solid rgba(201,168,76,0.3);
+        color: var(--dorado);
+        padding: 0.35rem 0.85rem;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 500;
+        letter-spacing: 0.05em;
+        width: fit-content;
+      }
+
+      .titulo-escuela {
+        font-family: 'DM Serif Display', serif;
+        font-size: clamp(2rem, 3.5vw, 2.8rem);
+        color: #ffffff;
+        line-height: 1.15;
+      }
+
+      .titulo-escuela em {
+        font-style: italic;
+        color: var(--dorado);
+      }
+
+      .subtitulo {
+        color: rgba(255,255,255,0.55);
+        font-size: 0.95rem;
+        font-weight: 300;
+        line-height: 1.6;
+        max-width: 320px;
+      }
+      
+      .cct-texto {
+        color: rgba(255,255,255,0.8);
+        font-size: 0.85rem;
+        letter-spacing: 0.05em;
+        margin-top: -0.5rem;
+      }
+      .cct-texto strong {
+        color: var(--dorado);
+        font-weight: 700;
+      }
+
+      .stats {
+        display: flex;
+        gap: 2rem;
+        margin-top: 1rem;
+      }
+
+      .stat {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+      }
+
+      .stat-num {
+        font-family: 'DM Serif Display', serif;
+        font-size: 1.6rem;
+        color: #fff;
+      }
+
+      .stat-label {
+        font-size: 0.75rem;
+        color: rgba(255,255,255,0.4);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .panel-izq-footer {
+        color: rgba(255,255,255,0.25);
+        font-size: 0.75rem;
+      }
+
+      /* Panel derecho — login */
+      .panel-der {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem 4rem;
+        background: var(--blanco);
+      }
+
+      .login-wrapper {
+        width: 100%;
+        max-width: 400px;
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+      }
+
+      .login-header {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .login-titulo {
+        font-family: 'DM Serif Display', serif;
+        font-size: 1.8rem;
+        color: var(--texto);
+      }
+
+      .login-subtitulo {
+        font-size: 0.9rem;
+        color: var(--gris);
+        font-weight: 300;
+      }
+
+      .divider {
+        width: 40px;
+        height: 3px;
+        background: var(--dorado);
+        border-radius: 2px;
+      }
+
+      /* Responsive */
+      @media (max-width: 768px) {
+        .layout { grid-template-columns: 1fr; }
+        
+        /* En celulares, en lugar de ocultar el panel verde, lo hacemos un encabezado bonito */
+        .panel-izq { 
+          padding: 2rem;
+          justify-content: center;
+          align-items: center;
+          text-align: center;
+        }
+        .panel-izq-contenido { align-items: center; gap: 1rem; }
+        .subtitulo { max-width: 100%; }
+        .stats, .panel-izq-footer { display: none; }
+        
+        .panel-der { padding: 2rem 1.5rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+
+      <div class="panel-izq">
+        
+        <img src="/logo.png" alt="Escudo de la Escuela" class="logo-escuela" />
+
+        <div class="panel-izq-contenido">
+          <span class="zona-badge">
+            <span>●</span> Zona Escolar 012
+          </span>
+          <h1 class="titulo-escuela">
+            Escuela Primaria<br />
+            <em>Cadete Juan Escutia</em>
+          </h1>
+          
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <p class="subtitulo">
+              Sistema digital de control de asistencia del personal docente. Turno matutino.
+            </p>
+            <p class="cct-texto">
+              CCT: <strong>21DPR109Z</strong>
+            </p>
+          </div>
+
+          <div class="stats">
+            <div class="stat">
+              <span class="stat-num">6</span>
+              <span class="stat-label">Grados</span>
+            </div>
+            <div class="stat">
+              <span class="stat-num">012</span>
+              <span class="stat-label">Zona escolar</span>
+            </div>
+          </div>
+        </div>
+
+        <p class="panel-izq-footer">
+          Sistema de asistencia docente · Servicio Social UMAD
+        </p>
+      </div>
+
+      <div class="panel-der">
+        <div class="login-wrapper">
+          <div class="login-header">
+            <h2 class="login-titulo">Bienvenido</h2>
+            <div class="divider"></div>
+            <p class="login-subtitulo">
+              Inicia sesión con tu cuenta para registrar tu asistencia.
+            </p>
+          </div>
+
+          <SignedOut>
+            <SignIn />
+          </SignedOut>
+
+          <SignedIn>
+            <p style="color: var(--gris); font-size: 0.9rem;">Redirigiendo...</p>
+          </SignedIn>
+        </div>
+      </div>
+
+    </div>
+  </body>
+</html>

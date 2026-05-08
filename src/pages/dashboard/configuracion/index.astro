@@ -1,0 +1,139 @@
+---
+// src/pages/dashboard/configuracion/index.astro
+import { supabase } from "../../../lib/supabase";
+
+// Traemos la configuración actual
+const { data: config } = await supabase
+  .from('configuracion')
+  .select('*')
+  .eq('id', 1)
+  .single();
+
+// Formatear la hora para el input (HH:mm)
+const horaFormateada = config?.hora_entrada ? config.hora_entrada.substring(0, 5) : '07:30';
+---
+
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Configuración — Zona 012</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      :root {
+        --verde: #1a4d2e; --blanco: #fafaf8; --gris: #6b7280; --gris-claro: #f3f4f6;
+        --texto: #1a1a1a; --naranja: #d97706; --dorado: #c9a84c;
+      }
+      body { font-family: 'DM Sans', sans-serif; background: var(--gris-claro); color: var(--texto); min-height: 100vh; }
+      
+      header { background: var(--verde); padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+      .header-izq { display: flex; flex-direction: column; gap: 0.15rem; }
+      .header-zona { font-size: 0.7rem; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 0.1em; }
+      .header-titulo { font-family: 'DM Serif Display', serif; font-size: 1.2rem; color: #fff; }
+      .btn-volver { color: rgba(255,255,255,0.8); text-decoration: none; font-size: 0.9rem; transition: color 0.2s; }
+      .btn-volver:hover { color: #fff; }
+
+      main { padding: 2rem; max-width: 600px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem; }
+      .titulo-seccion { font-family: 'DM Serif Display', serif; font-size: 1.6rem; color: var(--naranja); margin-bottom: 0.5rem; }
+
+      .card-config { background: #fff; border-radius: 14px; padding: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+      
+      .form-group { margin-bottom: 1.5rem; }
+      label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--gris); text-transform: uppercase; margin-bottom: 0.5rem; letter-spacing: 0.05em; }
+      input { width: 100%; padding: 0.8rem; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit; font-size: 1rem; outline: none; transition: border-color 0.2s; }
+      input:focus { border-color: var(--naranja); }
+      
+      .ayuda-texto { display: block; font-size: 0.8rem; color: var(--gris); margin-top: 0.4rem; font-style: italic; }
+
+      .btn-guardar { background: var(--naranja); color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 6px; font-size: 1rem; font-weight: 500; cursor: pointer; transition: opacity 0.2s; width: 100%; font-family: inherit; margin-top: 1rem;}
+      .btn-guardar:hover { opacity: 0.9; }
+      .btn-guardar:disabled { opacity: 0.7; cursor: not-allowed; }
+
+      /* Toast Notification */
+      #toast { visibility: hidden; min-width: 250px; background-color: var(--verde); color: #fff; text-align: center; border-radius: 6px; padding: 1rem; position: fixed; z-index: 1; left: 50%; bottom: 30px; font-size: 0.9rem; transform: translateX(-50%); }
+      #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
+      @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+      @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+    </style>
+  </head>
+  <body>
+
+    <header>
+      <div class="header-izq">
+        <span class="header-zona">Panel de control · Zona 012</span>
+        <span class="header-titulo">Configuración del Sistema</span>
+      </div>
+      <div>
+        <a href="/dashboard" class="btn-volver">← Volver al Dashboard</a>
+      </div>
+    </header>
+
+    <main>
+      <div>
+        <h2 class="titulo-seccion">Reglas de Asistencia</h2>
+        <p style="color: var(--gris); font-size: 0.95rem;">Ajusta el horario oficial. Los cambios aplican de forma inmediata para los próximos escaneos.</p>
+      </div>
+
+      <div class="card-config">
+        <form id="form-config">
+          <div class="form-group">
+            <label for="hora_entrada">Hora oficial de entrada</label>
+            <input type="time" id="hora_entrada" name="hora_entrada" value={horaFormateada} required>
+            <span class="ayuda-texto">Hora exacta en la que inicia la jornada (Ej. 07:30 a.m.)</span>
+          </div>
+
+          <div class="form-group">
+            <label for="minutos_tolerancia">Minutos de tolerancia permitidos</label>
+            <input type="number" id="minutos_tolerancia" name="minutos_tolerancia" value={config?.minutos_tolerancia ?? 10} min="0" max="60" required>
+            <span class="ayuda-texto">Tiempo extra de gracia antes de marcar tardanza (Ej. 10 minutos).</span>
+          </div>
+
+          <button type="submit" id="btn-guardar" class="btn-guardar">Guardar Cambios</button>
+        </form>
+      </div>
+    </main>
+
+    <div id="toast">¡Configuración guardada con éxito!</div>
+
+    <script>
+      const form = document.getElementById('form-config') as HTMLFormElement;
+      const btnGuardar = document.getElementById('btn-guardar') as HTMLButtonElement;
+      const toast = document.getElementById('toast');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        btnGuardar.disabled = true;
+        btnGuardar.textContent = 'Guardando...';
+
+        const hora = (document.getElementById('hora_entrada') as HTMLInputElement).value;
+        const tolerancia = (document.getElementById('minutos_tolerancia') as HTMLInputElement).value;
+
+        try {
+          const res = await fetch('/api/configuracion', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              hora_entrada: hora + ':00', // Aseguramos formato HH:mm:ss
+              minutos_tolerancia: tolerancia 
+            })
+          });
+
+          if (res.ok) {
+            // Mostrar mensajito verde de éxito
+            toast!.className = "show";
+            setTimeout(function(){ toast!.className = toast!.className.replace("show", ""); }, 3000);
+          } else {
+            alert('Error al guardar la configuración.');
+          }
+        } catch (error) {
+          alert('Error de red al conectar con el servidor.');
+        } finally {
+          btnGuardar.disabled = false;
+          btnGuardar.textContent = 'Guardar Cambios';
+        }
+      });
+    </script>
+  </body>
+</html>

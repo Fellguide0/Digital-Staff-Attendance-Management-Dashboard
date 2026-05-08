@@ -1,0 +1,175 @@
+---
+// src/pages/dashboard/ausentes/index.astro
+import { supabase } from "../../../lib/supabase";
+
+// 1. Obtener el inicio del día en la zona horaria correcta
+const inicioDia = new Date();
+inicioDia.setHours(0, 0, 0, 0);
+
+// 2. Traer todos los profesores activos
+const { data: profesoresActivos } = await supabase
+  .from('profesores')
+  .select('*')
+  .eq('activo', true)
+  .order('numero_lista', { ascending: true });
+
+// 3. Traer los registros de entrada de hoy
+const { data: registrosHoy } = await supabase
+  .from('registros')
+  .select('profesor_id')
+  .eq('tipo', 'entrada')
+  .gte('timestamp', inicioDia.toISOString());
+
+// 4. Filtrar: Profesores que NO están en los registros de hoy
+const idsPresentes = registrosHoy?.map(r => r.profesor_id) || [];
+const ausentes = profesoresActivos?.filter(p => !idsPresentes.includes(p.id)) || [];
+
+const fechaHoy = new Date().toLocaleDateString('es-MX', {
+  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+});
+---
+
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Docentes Ausentes — Zona 012</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --verde:      #1a4d2e;
+        --blanco:     #fafaf8;
+        --gris:       #6b7280;
+        --gris-claro: #f3f4f6;
+        --texto:      #1a1a1a;
+        --rojo:       #dc2626;
+        --rojo-claro: #fee2e2;
+      }
+
+      body {
+        font-family: 'DM Sans', sans-serif;
+        background: var(--gris-claro);
+        color: var(--texto);
+        min-height: 100vh;
+      }
+
+      header {
+        background: var(--verde);
+        padding: 1rem 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+
+      .header-izq { display: flex; flex-direction: column; gap: 0.15rem; }
+      .header-zona { font-size: 0.7rem; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 0.1em; }
+      .header-titulo { font-family: 'DM Serif Display', serif; font-size: 1.2rem; color: #fff; }
+      
+      .btn-volver {
+        color: rgba(255,255,255,0.8);
+        text-decoration: none;
+        font-size: 0.9rem;
+        transition: color 0.2s;
+      }
+      .btn-volver:hover { color: #fff; }
+
+      main { padding: 2rem; max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem; }
+
+      .titulo-seccion { font-family: 'DM Serif Display', serif; font-size: 1.6rem; color: var(--rojo); margin-bottom: 0.5rem; }
+
+      .tabla-card {
+        background: #fff;
+        border-radius: 14px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        overflow: hidden;
+      }
+
+      table { width: 100%; border-collapse: collapse; }
+
+      th {
+        text-align: left;
+        padding: 1rem 1.5rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--gris);
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        background: var(--gris-claro);
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      td {
+        padding: 1rem 1.5rem;
+        font-size: 0.9rem;
+        border-bottom: 1px solid #f3f4f6;
+        color: var(--texto);
+        vertical-align: middle;
+      }
+
+      tr:last-child td { border-bottom: none; }
+      tr:hover td { background: #fafafa; }
+
+      .badge-ausente {
+        background: var(--rojo-claro); color: var(--rojo);
+        display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.75rem; font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+
+    <header>
+      <div class="header-izq">
+        <span class="header-zona">Panel de control · Zona 012</span>
+        <span class="header-titulo">Gestión de Asistencia</span>
+      </div>
+      <div>
+        <a href="/dashboard" class="btn-volver">← Volver al Dashboard</a>
+      </div>
+    </header>
+
+    <main>
+      <div>
+        <h2 class="titulo-seccion">Docentes Ausentes</h2>
+        <p style="color: var(--gris); font-size: 0.95rem; text-transform: capitalize;">{fechaHoy}</p>
+        <p style="color: var(--gris); font-size: 0.85rem; margin-top: 0.2rem;">Docentes que no han registrado su entrada el día de hoy.</p>
+      </div>
+
+      <div class="tabla-card">
+        {ausentes && ausentes.length > 0 ? (
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 80px;"># Lista</th>
+                <th>Nombre Completo</th>
+                <th>Grado / Grupo</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ausentes.map((p) => (
+                <tr>
+                  <td style="color: var(--gris); font-weight: 500;">{p.numero_lista ?? '—'}</td>
+                  <td style="font-weight: 500;">{p.nombre}</td>
+                  <td>{p.grado_grupo ?? '—'}</td>
+                  <td>
+                    <span class="badge-ausente">❌ Sin registro</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div style="padding: 4rem 2rem; text-align: center;">
+            <div style="font-size: 2.5rem; margin-bottom: 1rem;">🎉</div>
+            <h3 style="color: var(--verde); font-family: 'DM Serif Display', serif; font-size: 1.3rem;">¡Asistencia Perfecta!</h3>
+            <p style="color: var(--gris); font-size: 0.95rem; margin-top: 0.5rem;">Todos los docentes han registrado su entrada hoy.</p>
+          </div>
+        )}
+      </div>
+    </main>
+  </body>
+</html>

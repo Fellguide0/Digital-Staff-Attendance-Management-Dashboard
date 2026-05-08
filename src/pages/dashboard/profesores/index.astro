@@ -1,0 +1,616 @@
+---
+// src/pages/dashboard/profesores/index.astro
+import { supabase } from "../../../lib/supabase";
+
+// Traemos a TODOS los profesores ordenados por número de lista
+const { data: profesores } = await supabase
+  .from('profesores')
+  .select('*')
+  .order('numero_lista', { ascending: true });
+
+const hoy = new Date().toLocaleDateString('es-MX', {
+  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+});
+---
+
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Directorio de Docentes — Zona 012</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --verde:      #1a4d2e;
+        --verde-med:  #2d7a4f;
+        --verde-claro:#e8f5ee;
+        --dorado:     #c9a84c;
+        --blanco:     #fafaf8;
+        --gris:       #6b7280;
+        --gris-claro: #f3f4f6;
+        --texto:      #1a1a1a;
+        --rojo:       #dc2626;
+        --rojo-claro: #fee2e2;
+        --naranja:    #d97706;
+        --naranja-claro: #fef3c7;
+      }
+
+      body {
+        font-family: 'DM Sans', sans-serif;
+        background: var(--gris-claro);
+        color: var(--texto);
+        min-height: 100vh;
+      }
+
+      header {
+        background: var(--verde);
+        padding: 1rem 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+
+      .header-izq { display: flex; flex-direction: column; gap: 0.15rem; }
+      .header-zona { font-size: 0.7rem; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 0.1em; }
+      .header-titulo { font-family: 'DM Serif Display', serif; font-size: 1.2rem; color: #fff; }
+      
+      .btn-volver {
+        color: rgba(255,255,255,0.8);
+        text-decoration: none;
+        font-size: 0.9rem;
+        transition: color 0.2s;
+      }
+      .btn-volver:hover { color: #fff; }
+
+      main { padding: 2rem; max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem; }
+
+      .tabla-card {
+        background: #fff;
+        border-radius: 14px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        overflow: hidden;
+      }
+
+      table { width: 100%; border-collapse: collapse; }
+
+      th {
+        text-align: left;
+        padding: 1rem 1.5rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--gris);
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        background: var(--gris-claro);
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      td {
+        padding: 1rem 1.5rem;
+        font-size: 0.9rem;
+        border-bottom: 1px solid #f3f4f6;
+        color: var(--texto);
+      }
+
+      tr:last-child td { border-bottom: none; }
+      tr:hover td { background: #fafafa; }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.65rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 500;
+      }
+      .badge-activo { background: var(--verde-claro); color: var(--verde-med); }
+      .badge-inactivo { background: var(--rojo-claro); color: var(--rojo); }
+
+      /* Estilos para el CRUD y Modal */
+      .header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+      .titulo-seccion { font-family: 'DM Serif Display', serif; font-size: 1.6rem; color: var(--verde); }
+
+      .btn-primario {
+        background: var(--verde);
+        color: white;
+        border: none;
+        padding: 0.6rem 1.2rem;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+        font-family: inherit;
+      }
+      .btn-primario:hover { background: var(--verde-med); }
+      .btn-primario:disabled { opacity: 0.7; cursor: not-allowed; }
+
+      .btn-secundario {
+        background: transparent;
+        color: var(--gris);
+        border: 1px solid #d1d5db;
+        padding: 0.6rem 1.2rem;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-family: inherit;
+      }
+      .btn-secundario:hover { background: var(--gris-claro); color: var(--texto); }
+
+      .btn-accion {
+         background: transparent;
+         border: none;
+         cursor: pointer;
+         font-size: 0.85rem;
+         font-weight: 500;
+         padding: 0.35rem 0.6rem;
+         border-radius: 4px;
+         transition: background 0.2s;
+      }
+      .btn-editar { color: var(--naranja); }
+      .btn-editar:hover { background: var(--naranja-claro); }
+      .btn-desactivar { color: var(--rojo); }
+      .btn-desactivar:hover { background: var(--rojo-claro); }
+      .btn-reactivar { color: var(--verde); }
+      .btn-reactivar:hover { background: var(--verde-claro); }
+
+      dialog {
+        margin: auto;
+        padding: 2rem;
+        border-radius: 14px;
+        border: none;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        width: 100%;
+        max-width: 500px;
+        background: #fff;
+        color: var(--texto);
+      }
+      dialog::backdrop { background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(2px); }
+      .modal-titulo { font-family: 'DM Serif Display', serif; font-size: 1.5rem; margin-bottom: 1.5rem; color: var(--verde); }
+
+      .form-grid { display: flex; flex-direction: column; gap: 1.2rem; }
+      .form-row { display: flex; gap: 1rem; }
+      .form-group { display: flex; flex-direction: column; gap: 0.4rem; flex: 1; }
+      .form-label { font-size: 0.75rem; font-weight: 600; color: var(--gris); text-transform: uppercase; letter-spacing: 0.05em; }
+      .form-input, .form-select {
+        padding: 0.7rem; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit; font-size: 0.95rem; outline: none; transition: border-color 0.2s; background: #fff;
+      }
+      .form-input:focus, .form-select:focus { border-color: var(--verde); }
+      .form-actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem; padding-top: 1.5rem; border-top: 1px solid var(--gris-claro); }
+      
+      .error-mensaje { background: var(--rojo-claro); color: var(--rojo); padding: 0.75rem; border-radius: 6px; font-size: 0.85rem; display: none; }
+      .error-mensaje.visible { display: block; }
+    </style>
+  </head>
+  <body>
+
+    <header>
+      <div class="header-izq">
+        <span class="header-zona">Panel de control · Zona 012</span>
+        <span class="header-titulo">Directorio de Docentes</span>
+      </div>
+      <div>
+        <a href="/dashboard" class="btn-volver">← Volver al Dashboard</a>
+      </div>
+    </header>
+
+    <main>
+      <div class="header-actions">
+        <h2 class="titulo-seccion">Gestión de Personal</h2>
+        <button id="btn-abrir-modal" class="btn-primario">+ Agregar Docente</button>
+      </div>
+
+      <div class="tabla-card">
+        <table>
+          <thead>
+            <tr>
+              <th>No.</th>
+              <th>Nombre Completo</th>
+              <th>Correo SEP</th>
+              <th>Grado/Grupo</th>
+              <th>Turno</th>
+              <th>Estado</th>
+              <th style="text-align: right;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {profesores?.map((profe) => (
+              <tr style={`opacity: ${profe.activo ? '1' : '0.5'};`}>
+                <td style="color: var(--gris); font-weight: 500;">{profe.numero_lista}</td>
+                <td style="font-weight: 500;">{profe.nombre}</td>
+                <td style="color: var(--gris);">{profe.email}</td>
+                <td>{profe.grado_grupo}</td>
+                <td style="text-transform: capitalize;">{profe.turno}</td>
+                <td>
+                  {profe.activo ? (
+                    <span class="badge badge-activo">Activo</span>
+                  ) : (
+                    <span class="badge badge-inactivo">Inactivo</span>
+                  )}
+                </td>
+                <td style="text-align: right; display: flex; gap: 0.25rem; justify-content: flex-end;">
+                  <button class="btn-accion btn-editar" data-id={profe.id}>Editar</button>
+                  {profe.activo ? (
+                    <button class="btn-accion btn-desactivar" data-id={profe.id}>Baja</button>
+                  ) : (
+                    <button class="btn-accion btn-reactivar" data-id={profe.id}>Reactivar</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {(!profesores || profesores.length === 0) && (
+              <tr>
+                <td colspan="7" style="text-align: center; padding: 3rem; color: var(--gris);">No hay docentes registrados todavía.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <!-- MODAL DE CREACIÓN -->
+    <dialog id="modal-agregar-profesor">
+      <h2 class="modal-titulo">Alta de Nuevo Docente</h2>
+      
+      <form id="form-agregar-profesor" class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Nombre Completo</label>
+          <input type="text" name="nombre" class="form-input" required minlength="2" placeholder="Ej. Roberto Gómez">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Correo Institucional (SEP)</label>
+          <input type="email" name="email" class="form-input" required placeholder="ejemplo@sep.gob.mx">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Turno</label>
+            <select name="turno" class="form-select" required>
+              <option value="matutino">Matutino</option>
+              <option value="vespertino">Vespertino</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex: 0.5;">
+            <label class="form-label">No. Lista</label>
+            <input type="number" name="numero_lista" class="form-input" required min="1" max="99" placeholder="Ej. 12">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Grado y Grupo</label>
+          <input type="text" name="grado_grupo" class="form-input" required pattern="^[1-6][A-Z]$" title="Debe ser un número del 1 al 6 seguido de una letra mayúscula (ej. 3A)" placeholder="Ej. 5A">
+        </div>
+        <div id="mensaje-error" class="error-mensaje"></div>
+        <div class="form-actions">
+          <button type="button" id="btn-cerrar-modal" class="btn-secundario">Cancelar</button>
+          <button type="submit" id="btn-guardar" class="btn-primario">Guardar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- MODAL DE EDICIÓN -->
+    <dialog id="modal-editar-profesor">
+      <h2 class="modal-titulo">Editar Docente</h2>
+      
+      <form id="form-editar-profesor" class="form-grid">
+        <input type="hidden" id="edit-id" name="id">
+        <div class="form-group">
+          <label class="form-label">Nombre Completo</label>
+          <input type="text" id="edit-nombre" name="nombre" class="form-input" required minlength="2">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Turno</label>
+            <select id="edit-turno" name="turno" class="form-select" required>
+              <option value="matutino">Matutino</option>
+              <option value="vespertino">Vespertino</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex: 0.5;">
+            <label class="form-label">No. Lista</label>
+            <input type="number" id="edit-numero" name="numero_lista" class="form-input" required min="1" max="99">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Grado y Grupo</label>
+          <input type="text" id="edit-grado" name="grado_grupo" class="form-input" required pattern="^[1-6][A-Z]$">
+        </div>
+        <div id="mensaje-error-edit" class="error-mensaje"></div>
+        <div class="form-actions">
+          <button type="button" id="btn-cerrar-edit" class="btn-secundario">Cancelar</button>
+          <button type="submit" id="btn-guardar-edit" class="btn-primario">Guardar Cambios</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- MODALES DE UI PERSONALIZADA (Confirmación y Alerta) -->
+    <dialog id="modal-confirmacion" style="max-width: 400px; text-align: center;">
+      <h2 id="confirm-titulo" class="modal-titulo" style="margin-bottom: 1rem; font-size: 1.3rem;">Confirmación</h2>
+      <p id="confirm-mensaje" style="color: var(--gris); font-size: 0.95rem; margin-bottom: 1.5rem;"></p>
+      <div style="display: flex; justify-content: center; gap: 1rem;">
+        <button id="btn-confirm-cancelar" class="btn-secundario">Cancelar</button>
+        <button id="btn-confirm-aceptar" class="btn-primario">Aceptar</button>
+      </div>
+    </dialog>
+
+    <dialog id="modal-alerta" style="max-width: 400px; text-align: center;">
+      <h2 class="modal-titulo" style="margin-bottom: 1rem; font-size: 1.3rem;">Aviso</h2>
+      <p id="alerta-mensaje" style="color: var(--gris); font-size: 0.95rem; margin-bottom: 1.5rem;"></p>
+      <div style="display: flex; justify-content: center;">
+        <button id="btn-alerta-aceptar" class="btn-primario">Entendido</button>
+      </div>
+    </dialog>
+
+    <script>
+      // ==========================================
+      // FUNCIONES HELPERS PARA MODALES CUSTOM
+      // ==========================================
+      const modalConfirmacion = document.getElementById('modal-confirmacion') as HTMLDialogElement;
+      const confirmTitulo = document.getElementById('confirm-titulo');
+      const confirmMensaje = document.getElementById('confirm-mensaje');
+      const btnConfirmCancelar = document.getElementById('btn-confirm-cancelar');
+      const btnConfirmAceptar = document.getElementById('btn-confirm-aceptar');
+
+      const modalAlerta = document.getElementById('modal-alerta') as HTMLDialogElement;
+      const alertaMensaje = document.getElementById('alerta-mensaje');
+      const btnAlertaAceptar = document.getElementById('btn-alerta-aceptar');
+
+      function mostrarAlerta(mensaje: string) {
+        alertaMensaje!.textContent = mensaje;
+        modalAlerta.showModal();
+        return new Promise<void>(resolve => {
+          btnAlertaAceptar!.onclick = () => {
+            modalAlerta.close();
+            resolve();
+          };
+        });
+      }
+
+      function mostrarConfirmacion(titulo: string, mensaje: string, textoBoton: string, esPeligro = false) {
+        confirmTitulo!.textContent = titulo;
+        confirmMensaje!.textContent = mensaje;
+        btnConfirmAceptar!.textContent = textoBoton;
+        
+        if (esPeligro) {
+          btnConfirmAceptar!.style.backgroundColor = 'var(--rojo)';
+        } else {
+          btnConfirmAceptar!.style.backgroundColor = 'var(--verde)';
+        }
+
+        modalConfirmacion.showModal();
+
+        return new Promise<boolean>(resolve => {
+          btnConfirmCancelar!.onclick = () => {
+            modalConfirmacion.close();
+            resolve(false);
+          };
+          btnConfirmAceptar!.onclick = () => {
+            modalConfirmacion.close();
+            resolve(true);
+          };
+        });
+      }
+
+      // ==========================================
+      // LÓGICA DE CREACIÓN (POST)
+      // ==========================================
+      const modal = document.getElementById('modal-agregar-profesor') as HTMLDialogElement;
+      const btnAbrir = document.getElementById('btn-abrir-modal');
+      const btnCerrar = document.getElementById('btn-cerrar-modal');
+      const form = document.getElementById('form-agregar-profesor') as HTMLFormElement;
+      const mensajeError = document.getElementById('mensaje-error');
+      const btnGuardar = document.getElementById('btn-guardar') as HTMLButtonElement;
+
+      btnAbrir?.addEventListener('click', () => modal.showModal());
+
+      btnCerrar?.addEventListener('click', () => {
+        modal.close();
+        form.reset();
+        mensajeError?.classList.remove('visible');
+      });
+
+      form?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        btnGuardar.disabled = true;
+        btnGuardar.textContent = 'Guardando...';
+        mensajeError?.classList.remove('visible');
+
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+        data.numero_lista = Number(data.numero_lista);
+
+        try {
+          const res = await fetch('/api/profesores', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+
+          const result = await res.json();
+
+          if (res.ok) {
+            modal.close();
+            form.reset();
+            window.location.reload(); 
+          } else {
+            mensajeError!.textContent = result.error || 'Error al guardar el registro.';
+            mensajeError!.classList.add('visible');
+          }
+        } catch (err) {
+          mensajeError!.textContent = 'Error de conexión con el servidor.';
+          mensajeError!.classList.add('visible');
+        } finally {
+          btnGuardar.disabled = false;
+          btnGuardar.textContent = 'Guardar';
+        }
+      });
+
+      // ==========================================
+      // LÓGICA DE DAR DE BAJA (DESACTIVAR)
+      // ==========================================
+      const botonesBaja = document.querySelectorAll('.btn-desactivar');
+      botonesBaja.forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = (e.target as HTMLButtonElement).getAttribute('data-id');
+          
+          const confirmado = await mostrarConfirmacion(
+            'Dar de baja',
+            '¿Estás seguro de que deseas dar de baja a este docente? Su cuenta quedará inactiva y no podrá registrar asistencia.',
+            'Sí, dar de baja',
+            true
+          );
+          
+          if (confirmado) {
+            const boton = e.target as HTMLButtonElement;
+            boton.textContent = 'Procesando...';
+            boton.disabled = true;
+
+            try {
+              const res = await fetch(`/api/profesores?id=${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ activo: false })
+              });
+
+              if (res.ok) {
+                window.location.reload(); 
+              } else {
+                await mostrarAlerta('Error al procesar la baja. Intenta de nuevo.');
+                boton.textContent = 'Baja';
+                boton.disabled = false;
+              }
+            } catch (err) {
+              await mostrarAlerta('Error de red al intentar conectar con el servidor.');
+              boton.textContent = 'Baja';
+              boton.disabled = false;
+            }
+          }
+        });
+      });
+
+      // ==========================================
+      // LÓGICA DE REACTIVAR
+      // ==========================================
+      const botonesReactivar = document.querySelectorAll('.btn-reactivar');
+      botonesReactivar.forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = (e.target as HTMLButtonElement).getAttribute('data-id');
+          
+          const confirmado = await mostrarConfirmacion(
+            'Reactivar docente',
+            'Este docente volverá a estar activo y podrá registrar asistencia nuevamente.',
+            'Reactivar',
+            false
+          );
+          
+          if (confirmado) {
+            const boton = e.target as HTMLButtonElement;
+            boton.textContent = 'Procesando...';
+            boton.disabled = true;
+
+            try {
+              const res = await fetch(`/api/profesores?id=${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ activo: true })
+              });
+
+              if (res.ok) {
+                window.location.reload(); 
+              } else {
+                await mostrarAlerta('Error al procesar la reactivación. Intenta de nuevo.');
+                boton.textContent = 'Reactivar';
+                boton.disabled = false;
+              }
+            } catch (err) {
+              await mostrarAlerta('Error de red al intentar conectar con el servidor.');
+              boton.textContent = 'Reactivar';
+              boton.disabled = false;
+            }
+          }
+        });
+      });
+
+      // ==========================================
+      // LÓGICA DE EDICIÓN (PATCH)
+      // ==========================================
+      const modalEdit = document.getElementById('modal-editar-profesor') as HTMLDialogElement;
+      const btnCerrarEdit = document.getElementById('btn-cerrar-edit');
+      const formEdit = document.getElementById('form-editar-profesor') as HTMLFormElement;
+      const msgErrorEdit = document.getElementById('mensaje-error-edit');
+      const btnGuardarEdit = document.getElementById('btn-guardar-edit') as HTMLButtonElement;
+
+      btnCerrarEdit?.addEventListener('click', () => {
+        modalEdit.close();
+        msgErrorEdit?.classList.remove('visible');
+      });
+
+      const botonesEditar = document.querySelectorAll('.btn-editar');
+      botonesEditar.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const id = (e.target as HTMLButtonElement).getAttribute('data-id');
+          const fila = (e.target as HTMLElement).closest('tr');
+          
+          if (fila) {
+            const columnas = fila.querySelectorAll('td');
+            const numeroLista = columnas[0].innerText.trim();
+            const nombre = columnas[1].innerText.trim();
+            const gradoGrupo = columnas[3].innerText.trim();
+            const turno = columnas[4].innerText.trim().toLowerCase();
+
+            (document.getElementById('edit-id') as HTMLInputElement).value = id || '';
+            (document.getElementById('edit-nombre') as HTMLInputElement).value = nombre;
+            (document.getElementById('edit-numero') as HTMLInputElement).value = numeroLista;
+            (document.getElementById('edit-grado') as HTMLInputElement).value = gradoGrupo;
+            (document.getElementById('edit-turno') as HTMLSelectElement).value = turno;
+
+            modalEdit.showModal();
+          }
+        });
+      });
+
+      formEdit?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        btnGuardarEdit.disabled = true;
+        btnGuardarEdit.textContent = 'Guardando...';
+        msgErrorEdit?.classList.remove('visible');
+
+        const formData = new FormData(formEdit);
+        const data = Object.fromEntries(formData.entries());
+        const id = data.id; 
+        
+        delete data.id; 
+        data.numero_lista = Number(data.numero_lista);
+
+        try {
+          const res = await fetch(`/api/profesores?id=${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+
+          const result = await res.json();
+
+          if (res.ok) {
+            modalEdit.close();
+            window.location.reload(); 
+          } else {
+            msgErrorEdit!.textContent = result.error || 'Error al actualizar el registro.';
+            msgErrorEdit!.classList.add('visible');
+          }
+        } catch (err) {
+          msgErrorEdit!.textContent = 'Error de conexión con el servidor.';
+          msgErrorEdit!.classList.add('visible');
+        } finally {
+          btnGuardarEdit.disabled = false;
+          btnGuardarEdit.textContent = 'Guardar Cambios';
+        }
+      });
+    </script>
+  </body>
+</html>

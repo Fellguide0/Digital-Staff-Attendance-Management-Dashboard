@@ -1,0 +1,193 @@
+---
+// src/pages/dashboard/kiosko/index.astro
+// This page requires no server-side data fetching. All the magic happens on the client.
+---
+
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kiosko de Asistencia — Zona 012</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      :root {
+        --verde: #1a4d2e; --blanco: #fafaf8; --gris: #6b7280; --gris-claro: #f3f4f6;
+        --texto: #1a1a1a; --naranja: #d97706; --rojo: #dc2626;
+      }
+      body {
+        font-family: 'DM Sans', sans-serif;
+        background: var(--blanco); /* White background for better contrast in a brightly lit lobby */
+        color: var(--texto);
+        min-height: 100vh;
+        display: flex; flex-direction: column;
+        overflow: hidden; /* Lock the tablet screen */
+      }
+      
+      header {
+        background: #fff; border-bottom: 1px solid #e5e7eb;
+        padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between;
+      }
+      .header-logo {
+        font-family: 'DM Serif Display', serif; font-size: 1.5rem; color: var(--verde); display: flex; align-items: center; gap: 0.5rem;
+      }
+      .btn-salir-kiosko { color: var(--gris); text-decoration: none; font-size: 0.8rem; }
+      
+      main {
+        flex: 1;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 2rem; padding: 2rem; text-align: center;
+      }
+
+      .titulo-kiosko { font-family: 'DM Serif Display', serif; font-size: 3rem; color: var(--texto); line-height: 1.1; }
+      .subtitulo-kiosko { color: var(--gris); font-size: 1.2rem; max-width: 500px; }
+
+      /* QR Container */
+      .qr-card {
+        background: #fff; padding: 2.5rem; border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.05);
+        display: flex; flex-direction: column; align-items: center; gap: 1.5rem;
+        border: 4px solid #fff;
+        transition: border-color 0.3s;
+      }
+      .qr-card.refreshing { border-color: var(--verde); }
+
+      #qr-canvas {
+        width: 350px !important; height: 350px !important;
+        opacity: 1; transition: opacity 0.2s;
+      }
+      #qr-canvas.fade { opacity: 0.3; }
+
+      /* Loading indicator */
+      #loader {
+        position: absolute; display: none; font-size: 1rem; color: var(--gris);
+      }
+
+      .instrucciones {
+        font-size: 1.1rem; color: var(--verde); font-weight: 500; display: flex; align-items: center; gap: 0.7rem;
+      }
+
+      /* Timer / Countdown bar */
+      .timer-container { width: 100%; max-width: 400px; height: 8px; background: #e5e7eb; border-radius: 99px; overflow: hidden; margin-top: 1rem; position: relative;}
+      #timer-bar { height: 100%; background: var(--verde); width: 100%; border-radius: 99px; transition: width 1s linear; }
+      #timer-text { position: absolute; font-size: 0.65rem; color: white; left: 50%; top: 50%; transform: translate(-50%, -50%); font-weight: 700;}
+      #timer-bar.warn { background: var(--naranja); }
+      #timer-bar.critical { background: var(--rojo); animation: pulse 0.5s infinite; }
+
+      @keyframes pulse { 0% {opacity: 1;} 50% {opacity: 0.5;} 100% {opacity: 1;} }
+    </style>
+  </head>
+  <body>
+
+    <header>
+      <div class="header-logo">
+        <span style="font-size: 2rem; color: var(--naranja);">•</span>
+        <div style="display: flex; flex-direction: column;">
+          <span>Zona Escolar 012</span>
+          <span style="font-size: 0.65rem; color: var(--gris); text-transform: uppercase; font-family: 'DM Sans', sans-serif;">Pase de Lista Digital</span>
+        </div>
+      </div>
+      <div>
+        <a href="/dashboard" class="btn-salir-kiosko">← Volver al Dashboard</a>
+      </div>
+    </header>
+
+    <main>
+      <div id="loader">Cargando código security...</div>
+      
+      <div class="qr-card" id="qr-card">
+        <canvas id="qr-canvas"></canvas>
+        <div class="instrucciones">
+          <span>📱</span>
+          <span>Abre tu cámara y escanea para registrar tu asistencia</span>
+        </div>
+      </div>
+
+      <div>
+        <h1 class="titulo-kiosko">Registra tu Entrada o Salida</h1>
+        <p class="subtitulo-kiosko">Por seguridad, este código cambia automáticamente cada 30 segundos.</p>
+        
+        <div class="timer-container">
+          <div id="timer-bar"></div>
+          <span id="timer-text">--</span>
+        </div>
+      </div>
+    </main>
+
+    <script src="qrcode"></script>
+
+    <script>
+      import QRCode from 'qrcode';
+
+      const qrCanvas = document.getElementById('qr-canvas') as HTMLCanvasElement;
+      const qrCard = document.getElementById('qr-card');
+      const timerBar = document.getElementById('timer-bar');
+      const timerText = document.getElementById('timer-text');
+      const loader = document.getElementById('loader');
+
+      let currentExpires = 0;
+      let isFetching = false;
+      const INTERVALO_REFRESCO_TOTAL = 30; 
+
+      async function refreshQRCode() {
+        if (isFetching) return;
+        isFetching = true;
+        
+        loader!.style.display = 'block';
+        qrCanvas.classList.add('fade');
+        qrCard?.classList.add('refreshing');
+
+        try {
+          const response = await fetch('/api/kiosko/generar-token');
+          const data = await response.json();
+
+          if (response.ok && data.urlParaEscanear) {
+            currentExpires = data.expires;
+            
+            await QRCode.toCanvas(qrCanvas, data.urlParaEscanear, {
+              width: 350,
+              margin: 1,
+              errorCorrectionLevel: 'H',
+              color: { dark: '#1a4d2e', light: '#ffffff' }
+            });
+          } else {
+            console.error('Error del servidor:', data.error);
+            currentExpires = 5; // Si falla, espera 5 segundos antes de reintentar
+          }
+        } catch (error) {
+          console.error('Error de red actualizando QR:', error);
+          currentExpires = 5; // Si no hay internet, espera 5 segundos
+        } finally {
+          isFetching = false;
+          loader!.style.display = 'none';
+          qrCanvas.classList.remove('fade');
+          qrCard?.classList.remove('refreshing');
+        }
+      }
+
+      function updateTimerBar() {
+        if (currentExpires > 0) {
+          currentExpires--;
+          
+          const percentage = (currentExpires / INTERVALO_REFRESCO_TOTAL) * 100;
+          timerBar!.style.width = `${percentage}%`;
+          timerText!.textContent = `${currentExpires}s`;
+
+          timerBar!.classList.remove('warn', 'critical');
+          if (currentExpires <= 10 && currentExpires > 5) {
+            timerBar!.classList.add('warn');
+          } else if (currentExpires <= 5) {
+            timerBar!.classList.add('critical');
+          }
+        } else if (!isFetching) {
+          timerBar!.style.width = `0%`;
+          refreshQRCode();
+        }
+      }
+
+      refreshQRCode();
+      setInterval(updateTimerBar, 1000);
+    </script>
+  </body>
+</html>

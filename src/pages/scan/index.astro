@@ -1,0 +1,291 @@
+---
+// src/pages/scan/index.astro
+const { sessionClaims } = Astro.locals.auth();
+const userName = (sessionClaims?.publicMetadata as { nombre?: string })?.nombre ?? "Profesor";
+---
+
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Registrar Asistencia</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      :root {
+        --verde:     #1a4d2e;
+        --verde-med: #2d7a4f;
+        --dorado:    #c9a84c;
+        --blanco:    #fafaf8;
+        --gris:      #6b7280;
+      }
+      body {
+        font-family: 'DM Sans', sans-serif;
+        background: var(--blanco);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        background: var(--verde);
+        padding: 1rem 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .header-info { display: flex; flex-direction: column; gap: 0.1rem; }
+      .header-escuela { font-size: 0.7rem; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.08em; }
+      .header-nombre { font-size: 0.95rem; color: #fff; font-weight: 500; }
+      .btn-salir {
+        background: rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.2);
+        color: rgba(255,255,255,0.8);
+        padding: 0.4rem 1rem;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1.5rem;
+        gap: 2rem;
+      }
+      .fecha-hora {
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+      .hora {
+        font-family: 'DM Serif Display', serif;
+        font-size: 3.5rem;
+        color: var(--verde);
+        line-height: 1;
+        letter-spacing: -0.02em;
+      }
+      .fecha {
+        font-size: 0.9rem;
+        color: var(--gris);
+        font-weight: 300;
+        text-transform: capitalize;
+      }
+      .acciones {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        width: 100%;
+        max-width: 320px;
+      }
+      .btn-accion {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        padding: 1.1rem;
+        border-radius: 14px;
+        border: none;
+        font-family: inherit;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: transform 0.15s, opacity 0.15s;
+      }
+      .btn-accion:active { transform: scale(0.97); }
+      .btn-accion:disabled { opacity: 0.5; cursor: not-allowed; }
+      .btn-entrada { background: var(--verde); color: #fff; }
+      .btn-salida { background: var(--blanco); color: var(--verde); border: 2px solid var(--verde); }
+      .btn-icono { font-size: 1.3rem; }
+      .resultado {
+        display: none;
+        width: 100%;
+        max-width: 320px;
+        border-radius: 14px;
+        padding: 1.25rem;
+        text-align: center;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .resultado.visible { display: flex; }
+      .resultado.exito { background: #ecfdf5; border: 1px solid #6ee7b7; }
+      .resultado.error { background: #fef2f2; border: 1px solid #fca5a5; }
+      .resultado-titulo { font-weight: 500; font-size: 0.95rem; color: var(--verde); }
+      .resultado.error .resultado-titulo { color: #dc2626; }
+      .resultado-detalle { font-size: 0.82rem; color: var(--gris); font-weight: 300; }
+      .cargando { display: none; }
+      .cargando.visible { display: block; color: var(--gris); font-size: 0.9rem; text-align: center; }
+    </style>
+  </head>
+  <body>
+
+    <header>
+      <div class="header-info">
+        <span class="header-escuela">Escuela Primaria Juan Escutia</span>
+        <span class="header-nombre">Hola, {userName} 👋</span>
+      </div>
+      <button id="btn-cerrar-sesion" class="btn-salir">Cerrar sesión</button>
+    </header>
+
+    <main>
+      <div class="fecha-hora">
+        <div class="hora" id="hora">--:--</div>
+        <div class="fecha" id="fecha">cargando...</div>
+      </div>
+
+      <div class="acciones">
+        <button class="btn-accion btn-entrada" id="btn-entrada">
+          <span class="btn-icono">☀️</span>
+          Registrar entrada
+        </button>
+        <button class="btn-accion btn-salida" id="btn-salida">
+          <span class="btn-icono">🌙</span>
+          Registrar salida
+        </button>
+      </div>
+
+      <div class="cargando" id="cargando">Registrando...</div>
+
+      <div class="resultado" id="resultado">
+        <div class="resultado-titulo" id="resultado-titulo"></div>
+        <div class="resultado-detalle" id="resultado-detalle"></div>
+      </div>
+    </main>
+
+   <script>
+  // --- 1. CIERRE DE SESIÓN MANUAL ---
+  const btnCerrarSesion = document.getElementById('btn-cerrar-sesion');
+  if (btnCerrarSesion) {
+    btnCerrarSesion.addEventListener('click', async () => {
+      btnCerrarSesion.innerText = 'Cerrando...';
+      btnCerrarSesion.setAttribute('disabled', 'true');
+      if (window.Clerk) {
+        await window.Clerk.signOut();
+        window.location.href = '/';
+      } else {
+        window.location.href = '/';
+      }
+    });
+  }
+
+  // --- 2. RELOJ EN TIEMPO REAL ---
+  function actualizarReloj() {
+    const ahora = new Date();
+    const hora = ahora.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+    const fecha = ahora.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+    
+    const elHora = document.getElementById('hora');
+    const elFecha = document.getElementById('fecha');
+    
+    if(elHora) elHora.textContent = hora;
+    if(elFecha) elFecha.textContent = fecha;
+  }
+  actualizarReloj();
+  setInterval(actualizarReloj, 1000);
+
+  // --- 3. ATRAPAMOS EL TOKEN DE LA URL ---
+  const urlParams = new URLSearchParams(window.location.search);
+  const tokenKiosko = urlParams.get('token');
+
+  // --- 4. LÓGICA DE REGISTRO (CHECK-IN) ---
+  const btnEntrada = document.getElementById('btn-entrada');
+  const btnSalida = document.getElementById('btn-salida');
+
+  async function registrar(tipo) {
+    const cargando = document.getElementById('cargando');
+    const resultado = document.getElementById('resultado');
+    const titulo = document.getElementById('resultado-titulo');
+    const detalle = document.getElementById('resultado-detalle');
+
+    if (!tokenKiosko) {
+        resultado.classList.add('visible', 'error');
+        titulo.textContent = '❌ Falta el código de seguridad';
+        detalle.textContent = 'Asegúrate de escanear el QR desde el Kiosko de la escuela.';
+        return;
+    }
+
+    if (btnEntrada) btnEntrada.disabled = true;
+    if (btnSalida) btnSalida.disabled = true;
+    
+    cargando.classList.add('visible');
+    resultado.classList.remove('visible', 'exito', 'error');
+
+    try {
+      const res = await fetch('/api/registros/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo, token: tokenKiosko })
+      });
+
+      const data = await res.json();
+      cargando.classList.remove('visible');
+
+      if (res.ok) {
+        resultado.classList.add('visible', 'exito');
+        titulo.textContent = tipo === 'entrada' ? '✅ Entrada registrada' : '✅ Salida registrada';
+        const hora = new Date(data.timestamp).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+        detalle.textContent = data.es_tardanza
+          ? `⚠️ Registrado a las ${hora} — tardanza`
+          : `Registrado a las ${hora}`;
+      } else {
+        resultado.classList.add('visible', 'error');
+        titulo.textContent = '❌ No se pudo registrar';
+        detalle.textContent = data.error ?? 'Intenta de nuevo';
+      }
+    } catch (e) {
+      cargando.classList.remove('visible');
+      resultado.classList.add('visible', 'error');
+      titulo.textContent = '❌ Error de conexión';
+      detalle.textContent = 'Verifica tu internet e intenta de nuevo';
+    } finally {
+      setTimeout(() => {
+        if (btnEntrada) btnEntrada.disabled = false;
+        if (btnSalida) btnSalida.disabled = false;
+      }, 3000);
+    }
+  }
+
+  // --- 5. CONECTAR BOTONES A LA FUNCIÓN ---
+  if (btnEntrada) {
+    btnEntrada.addEventListener('click', () => registrar('entrada'));
+  }
+  if (btnSalida) {
+    btnSalida.addEventListener('click', () => registrar('salida'));
+  }
+
+  // ==========================================
+  // --- 6. CIERRE DE SESIÓN POR INACTIVIDAD ---
+  // ==========================================
+  let tiempoInactivo = 0;
+  const LIMITE_MINUTOS = 15; // Tiempo en minutos antes de cerrar sesión automáticamente
+
+  function resetearReloj() {
+    tiempoInactivo = 0;
+  }
+
+  // Detectar actividad del usuario (touch para celulares es lo más importante aquí)
+  window.onload = resetearReloj;
+  window.onmousemove = resetearReloj;
+  window.onkeypress = resetearReloj;
+  window.ontouchstart = resetearReloj; 
+
+  // Cronómetro oculto
+  setInterval(async () => {
+    tiempoInactivo++;
+    
+    if (tiempoInactivo >= (LIMITE_MINUTOS * 60)) {
+      if (window.Clerk) {
+        console.log("Cerrando sesión por inactividad...");
+        await window.Clerk.signOut();
+        window.location.href = '/';
+      }
+    }
+  }, 1000);
+</script>
+
+  </body>
+</html>

@@ -1,0 +1,433 @@
+---
+// src/pages/dashboard/tardanzas/index.astro
+import { supabase } from "../../../lib/supabase";
+
+// 1. Traemos la configuración actual para calcular la hora límite dinámica
+const { data: config } = await supabase
+  .from('configuracion')
+  .select('hora_entrada, minutos_tolerancia')
+  .eq('id', 1)
+  .single();
+
+// Lógica para sumar los minutos de tolerancia a la hora de entrada y formatear bonito (AM/PM)
+let horaLimiteTexto = "7:40 AM"; // Valor por defecto en caso de que algo falle
+if (config && config.hora_entrada) {
+  const [horasStr, minutosStr] = config.hora_entrada.split(':');
+  let horas = parseInt(horasStr, 10);
+  let minutos = parseInt(minutosStr, 10) + (config.minutos_tolerancia || 0);
+
+  // Si los minutos se pasan de 60, sumamos una hora
+  if (minutos >= 60) {
+    horas += Math.floor(minutos / 60);
+    minutos = minutos % 60;
+  }
+
+  // Formato de 12 horas (AM/PM)
+  const ampm = horas >= 12 ? 'PM' : 'AM';
+  horas = horas % 12;
+  horas = horas ? horas : 12; // la hora '0' debe ser '12'
+  const minutosFormat = minutos < 10 ? '0' + minutos : minutos;
+
+  horaLimiteTexto = `${horas}:${minutosFormat} ${ampm}`;
+}
+
+// 2. Traemos solo los registros que fueron tardanza (histórico de los últimos 100)
+const { data: tardanzas } = await supabase
+  .from('registros')
+  .select(`
+    id, timestamp, es_tardanza, observaciones,
+    profesores ( nombre, grado_grupo, numero_lista )
+  `)
+  .eq('es_tardanza', true)
+  .order('timestamp', { ascending: false })
+  .limit(100);
+---
+
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gestión de Tardanzas — Zona 012</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --verde:      #1a4d2e;
+        --verde-med:  #2d7a4f;
+        --blanco:     #fafaf8;
+        --gris:       #6b7280;
+        --gris-claro: #f3f4f6;
+        --texto:      #1a1a1a;
+        --naranja:    #d97706;
+        --naranja-claro: #fef3c7;
+        --rojo:       #dc2626;
+        --rojo-claro: #fee2e2;
+      }
+
+      body {
+        font-family: 'DM Sans', sans-serif;
+        background: var(--gris-claro);
+        color: var(--texto);
+        min-height: 100vh;
+      }
+
+      header {
+        background: var(--verde);
+        padding: 1rem 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+
+      .header-izq { display: flex; flex-direction: column; gap: 0.15rem; }
+      .header-zona { font-size: 0.7rem; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 0.1em; }
+      .header-titulo { font-family: 'DM Serif Display', serif; font-size: 1.2rem; color: #fff; }
+      
+      .btn-volver {
+        color: rgba(255,255,255,0.8);
+        text-decoration: none;
+        font-size: 0.9rem;
+        transition: color 0.2s;
+      }
+      .btn-volver:hover { color: #fff; }
+
+      main { padding: 2rem; max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem; }
+
+      .titulo-seccion { font-family: 'DM Serif Display', serif; font-size: 1.6rem; color: var(--naranja); margin-bottom: 0.5rem; }
+
+      .tabla-card {
+        background: #fff;
+        border-radius: 14px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        overflow: hidden;
+      }
+
+      table { width: 100%; border-collapse: collapse; }
+
+      th {
+        text-align: left;
+        padding: 1rem 1.5rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--gris);
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        background: var(--gris-claro);
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      td {
+        padding: 1rem 1.5rem;
+        font-size: 0.9rem;
+        border-bottom: 1px solid #f3f4f6;
+        color: var(--texto);
+        vertical-align: top;
+      }
+
+      tr:last-child td { border-bottom: none; }
+      tr:hover td { background: #fafafa; }
+
+      .badge-tardanza {
+        background: var(--naranja-claro); color: var(--naranja);
+        display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.75rem; font-weight: 500;
+      }
+
+      /* Estilos para botones de acción en tabla */
+      .btn-accion-nota {
+        background: transparent; 
+        border: 1px solid var(--naranja); 
+        color: var(--naranja); 
+        padding: 0.15rem 0.6rem; 
+        border-radius: 4px; 
+        font-size: 0.75rem; 
+        cursor: pointer; 
+        transition: all 0.2s;
+        font-family: inherit;
+      }
+      .btn-accion-nota:hover { background: var(--naranja-claro); }
+
+      .btn-eliminar-nota {
+        background: transparent; 
+        border: 1px solid #fca5a5; 
+        color: var(--rojo); 
+        padding: 0.15rem 0.5rem; 
+        border-radius: 4px; 
+        font-size: 0.75rem; 
+        cursor: pointer; 
+        transition: all 0.2s;
+        font-family: inherit;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .btn-eliminar-nota:hover { background: #fee2e2; border-color: var(--rojo); }
+
+      /* Botones Estándar (Modales) */
+      .btn-primario {
+        background: var(--naranja); color: white; border: none; padding: 0.6rem 1.2rem;
+        border-radius: 6px; font-size: 0.9rem; font-weight: 500; cursor: pointer;
+        transition: background 0.2s, opacity 0.2s; font-family: inherit;
+      }
+      .btn-primario:hover { opacity: 0.9; }
+      .btn-primario:disabled { opacity: 0.7; cursor: not-allowed; }
+
+      .btn-secundario {
+        background: transparent; color: var(--gris); border: 1px solid #d1d5db;
+        padding: 0.6rem 1.2rem; border-radius: 6px; font-size: 0.9rem; cursor: pointer;
+        transition: all 0.2s; font-family: inherit;
+      }
+      .btn-secundario:hover { background: var(--gris-claro); color: var(--texto); }
+
+      /* Estilos para el Modal de Notas */
+      dialog { margin: auto; padding: 2rem; border-radius: 14px; border: none; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 450px; }
+      dialog::backdrop { background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(2px); }
+    </style>
+  </head>
+  <body>
+
+    <header>
+      <div class="header-izq">
+        <span class="header-zona">Panel de control · Zona 012</span>
+        <span class="header-titulo">Gestión de Incidencias</span>
+      </div>
+      <div>
+        <a href="/dashboard" class="btn-volver">← Volver al Dashboard</a>
+      </div>
+    </header>
+
+    <main>
+      <div>
+        <h2 class="titulo-seccion">Tardanzas por Justificar</h2>
+        <!-- AQUÍ SE INYECTA LA HORA DINÁMICA CALCULADA -->
+        <p style="color: var(--gris); font-size: 0.95rem;">Historial de llegadas posteriores a las {horaLimiteTexto}.</p>
+      </div>
+
+      <div class="tabla-card">
+        {tardanzas && tardanzas.length > 0 ? (
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha y Hora</th>
+                <th>Nombre Completo</th>
+                <th>Grado/Grupo</th>
+                <th>Estado y Justificación</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tardanzas.map((r) => {
+                const fecha = new Date(r.timestamp);
+                return (
+                  <tr>
+                    <td style="padding-top: 1.2rem;">
+                      <div style="font-weight: 500;">{fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}</div>
+                      <div style="font-size: 0.8rem; color: var(--gris);">{fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
+                    </td>
+                    <td style="font-weight: 500; padding-top: 1.2rem;">{(r.profesores as any)?.nombre ?? '—'}</td>
+                    <td style="padding-top: 1.2rem;">{(r.profesores as any)?.grado_grupo ?? '—'}</td>
+                    <td>
+                      <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="badge-tardanza">⚠️ Tardanza</span>
+                        
+                        <!-- BOTÓN AÑADIR/EDITAR -->
+                        <button 
+                          class="btn-accion-nota btn-anadir-nota" 
+                          data-id={r.id} 
+                          data-nombre={(r.profesores as any)?.nombre}
+                          data-nota={r.observaciones || ''}
+                        >
+                          {r.observaciones ? '✏️ Editar' : '📝 Añadir Nota'}
+                        </button>
+
+                        <!-- BOTÓN ELIMINAR (Solo aparece si ya hay una nota) -->
+                        {r.observaciones && (
+                          <button 
+                            class="btn-eliminar-nota" 
+                            data-id={r.id} 
+                            title="Eliminar justificación"
+                          >
+                            🗑️
+                          </button>
+                        )}
+                      </div>
+                      
+                      <!-- TEXTO DE LA NOTA -->
+                      {r.observaciones && (
+                        <div style="margin-top: 0.6rem; font-size: 0.8rem; color: var(--texto); background: #fff8f0; border-left: 3px solid var(--naranja); padding: 0.4rem 0.6rem; border-radius: 0 4px 4px 0;">
+                          "{r.observaciones}"
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <div style="padding: 3rem; text-align: center; color: var(--gris);">
+            Excelente, no hay tardanzas registradas recientemente.
+          </div>
+        )}
+      </div>
+    </main>
+
+    <!-- MODAL DE JUSTIFICACIÓN -->
+    <dialog id="modal-nota">
+      <h2 style="font-family: 'DM Serif Display', serif; font-size: 1.4rem; color: var(--naranja); margin-bottom: 0.2rem;">Justificar Tardanza</h2>
+      <p id="nota-nombre-docente" style="font-size: 0.9rem; color: var(--gris); margin-bottom: 1.2rem;"></p>
+      
+      <form id="form-nota" style="display: flex; flex-direction: column; gap: 1rem;">
+        <input type="hidden" id="nota-registro-id">
+        
+        <div>
+          <label style="font-size: 0.75rem; font-weight: 600; color: var(--gris); text-transform: uppercase; letter-spacing: 0.05em;">Observaciones / Motivo</label>
+          <textarea id="nota-texto" required rows="3" style="width: 100%; margin-top: 0.5rem; padding: 0.7rem; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit; font-size: 0.9rem; resize: none; outline: none;" placeholder="Ej. Retraso por tráfico, permiso médico, etc..."></textarea>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.8rem; margin-top: 0.5rem;">
+          <button type="button" id="btn-cerrar-nota" class="btn-secundario">Cancelar</button>
+          <button type="submit" id="btn-guardar-nota" class="btn-primario">Guardar Nota</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- MODAL DE CONFIRMACIÓN (DISEÑO APP) -->
+    <dialog id="modal-confirmacion" style="max-width: 400px; text-align: center;">
+      <h2 id="confirm-titulo" style="font-family: 'DM Serif Display', serif; font-size: 1.4rem; color: var(--rojo); margin-bottom: 1rem;">Confirmación</h2>
+      <p id="confirm-mensaje" style="color: var(--gris); font-size: 0.95rem; margin-bottom: 1.5rem;"></p>
+      <div style="display: flex; justify-content: center; gap: 1rem;">
+        <button id="btn-confirm-cancelar" class="btn-secundario">Cancelar</button>
+        <button id="btn-confirm-aceptar" class="btn-primario" style="background-color: var(--rojo);">Aceptar</button>
+      </div>
+    </dialog>
+
+    <script>
+      // ==========================================
+      // LÓGICA DE CONFIRMACIÓN PERSONALIZADA
+      // ==========================================
+      const modalConfirmacion = document.getElementById('modal-confirmacion') as HTMLDialogElement;
+      const confirmTitulo = document.getElementById('confirm-titulo');
+      const confirmMensaje = document.getElementById('confirm-mensaje');
+      const btnConfirmCancelar = document.getElementById('btn-confirm-cancelar');
+      const btnConfirmAceptar = document.getElementById('btn-confirm-aceptar');
+
+      function mostrarConfirmacion(titulo: string, mensaje: string, textoBoton: string) {
+        confirmTitulo!.textContent = titulo;
+        confirmMensaje!.textContent = mensaje;
+        btnConfirmAceptar!.textContent = textoBoton;
+
+        modalConfirmacion.showModal();
+
+        return new Promise<boolean>(resolve => {
+          btnConfirmCancelar!.onclick = () => {
+            modalConfirmacion.close();
+            resolve(false);
+          };
+          btnConfirmAceptar!.onclick = () => {
+            modalConfirmacion.close();
+            resolve(true);
+          };
+        });
+      }
+
+      // ==========================================
+      // LÓGICA DEL MODAL DE NOTAS
+      // ==========================================
+      const modalNota = document.getElementById('modal-nota') as HTMLDialogElement;
+      const formNota = document.getElementById('form-nota') as HTMLFormElement;
+      const inputRegistroId = document.getElementById('nota-registro-id') as HTMLInputElement;
+      const inputTexto = document.getElementById('nota-texto') as HTMLTextAreaElement;
+      const labelNombre = document.getElementById('nota-nombre-docente');
+      const btnGuardarNota = document.getElementById('btn-guardar-nota') as HTMLButtonElement;
+
+      inputTexto.addEventListener('focus', () => inputTexto.style.borderColor = 'var(--naranja)');
+      inputTexto.addEventListener('blur', () => inputTexto.style.borderColor = '#d1d5db');
+
+      document.querySelectorAll('.btn-anadir-nota').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const boton = e.currentTarget as HTMLButtonElement;
+          inputRegistroId.value = boton.getAttribute('data-id') || '';
+          labelNombre!.textContent = `Docente: ${boton.getAttribute('data-nombre')}`;
+          inputTexto.value = boton.getAttribute('data-nota') || ''; 
+          
+          modalNota.showModal();
+        });
+      });
+
+      document.getElementById('btn-cerrar-nota')?.addEventListener('click', () => {
+        modalNota.close();
+        formNota.reset();
+      });
+
+      formNota?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        btnGuardarNota.disabled = true;
+        btnGuardarNota.textContent = 'Guardando...';
+
+        try {
+          const res = await fetch(`/api/registros?id=${inputRegistroId.value}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ observaciones: inputTexto.value })
+          });
+
+          if (res.ok) {
+            modalNota.close();
+            window.location.reload(); 
+          } else {
+            alert('Error al guardar la nota en la base de datos.');
+          }
+        } catch (error) {
+          alert('Error de red al intentar conectar con el servidor.');
+        } finally {
+          btnGuardarNota.disabled = false;
+          btnGuardarNota.textContent = 'Guardar Nota';
+        }
+      });
+
+      // ==========================================
+      // LÓGICA: Eliminar nota (Bote de basura)
+      // ==========================================
+      document.querySelectorAll('.btn-eliminar-nota').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const boton = e.currentTarget as HTMLButtonElement;
+          const registroId = boton.getAttribute('data-id');
+
+          const confirmado = await mostrarConfirmacion(
+            'Eliminar justificación',
+            '¿Estás seguro de que deseas eliminar esta nota? El registro volverá a aparecer como una tardanza sin justificar.',
+            'Sí, eliminar'
+          );
+
+          if (!confirmado) return; 
+          
+          boton.style.opacity = '0.5';
+          boton.disabled = true;
+
+          try {
+            const res = await fetch(`/api/registros?id=${registroId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ observaciones: null })
+            });
+
+            if (res.ok) {
+              window.location.reload(); 
+            } else {
+              alert('Error al intentar eliminar la nota.');
+              boton.style.opacity = '1';
+              boton.disabled = false;
+            }
+          } catch (error) {
+            alert('Error de red al conectar con el servidor.');
+            boton.style.opacity = '1';
+            boton.disabled = false;
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
