@@ -31,7 +31,10 @@ if (config && config.hora_entrada) {
   horaLimiteTexto = `${horas}:${minutosFormat} ${ampm}`;
 }
 
-// 2. Traemos solo los registros que fueron tardanza (histórico de los últimos 100)
+// 2. Traemos solo los registros que fueron tardanza (SOLO DE HOY)
+const inicioDia = new Date();
+inicioDia.setHours(0, 0, 0, 0);
+
 const { data: tardanzas } = await supabase
   .from('registros')
   .select(`
@@ -39,8 +42,8 @@ const { data: tardanzas } = await supabase
     profesores ( nombre, grado_grupo, numero_lista )
   `)
   .eq('es_tardanza', true)
-  .order('timestamp', { ascending: false })
-  .limit(100);
+  .gte('timestamp', inicioDia.toISOString()) // <--- El filtro mágico del día
+  .order('timestamp', { ascending: false });
 ---
 
 <!DOCTYPE html>
@@ -201,7 +204,6 @@ const { data: tardanzas } = await supabase
     <main>
       <div>
         <h2 class="titulo-seccion">Tardanzas por Justificar</h2>
-        <!-- AQUÍ SE INYECTA LA HORA DINÁMICA CALCULADA -->
         <p style="color: var(--gris); font-size: 0.95rem;">Historial de llegadas posteriores a las {horaLimiteTexto}.</p>
       </div>
 
@@ -222,8 +224,12 @@ const { data: tardanzas } = await supabase
                 return (
                   <tr>
                     <td style="padding-top: 1.2rem;">
-                      <div style="font-weight: 500;">{fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}</div>
-                      <div style="font-size: 0.8rem; color: var(--gris);">{fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
+                      <div style="font-weight: 500;">
+                        {fecha.toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: '2-digit', month: 'short' })}
+                      </div>
+                      <div style="font-size: 0.8rem; color: var(--gris);">
+                        {fecha.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true })}
+                      </div>
                     </td>
                     <td style="font-weight: 500; padding-top: 1.2rem;">{(r.profesores as any)?.nombre ?? '—'}</td>
                     <td style="padding-top: 1.2rem;">{(r.profesores as any)?.grado_grupo ?? '—'}</td>
@@ -231,7 +237,6 @@ const { data: tardanzas } = await supabase
                       <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <span class="badge-tardanza">⚠️ Tardanza</span>
                         
-                        <!-- BOTÓN AÑADIR/EDITAR -->
                         <button 
                           class="btn-accion-nota btn-anadir-nota" 
                           data-id={r.id} 
@@ -241,7 +246,6 @@ const { data: tardanzas } = await supabase
                           {r.observaciones ? '✏️ Editar' : '📝 Añadir Nota'}
                         </button>
 
-                        <!-- BOTÓN ELIMINAR (Solo aparece si ya hay una nota) -->
                         {r.observaciones && (
                           <button 
                             class="btn-eliminar-nota" 
@@ -253,7 +257,6 @@ const { data: tardanzas } = await supabase
                         )}
                       </div>
                       
-                      <!-- TEXTO DE LA NOTA -->
                       {r.observaciones && (
                         <div style="margin-top: 0.6rem; font-size: 0.8rem; color: var(--texto); background: #fff8f0; border-left: 3px solid var(--naranja); padding: 0.4rem 0.6rem; border-radius: 0 4px 4px 0;">
                           "{r.observaciones}"
@@ -273,7 +276,6 @@ const { data: tardanzas } = await supabase
       </div>
     </main>
 
-    <!-- MODAL DE JUSTIFICACIÓN -->
     <dialog id="modal-nota">
       <h2 style="font-family: 'DM Serif Display', serif; font-size: 1.4rem; color: var(--naranja); margin-bottom: 0.2rem;">Justificar Tardanza</h2>
       <p id="nota-nombre-docente" style="font-size: 0.9rem; color: var(--gris); margin-bottom: 1.2rem;"></p>
@@ -293,7 +295,6 @@ const { data: tardanzas } = await supabase
       </form>
     </dialog>
 
-    <!-- MODAL DE CONFIRMACIÓN (DISEÑO APP) -->
     <dialog id="modal-confirmacion" style="max-width: 400px; text-align: center;">
       <h2 id="confirm-titulo" style="font-family: 'DM Serif Display', serif; font-size: 1.4rem; color: var(--rojo); margin-bottom: 1rem;">Confirmación</h2>
       <p id="confirm-mensaje" style="color: var(--gris); font-size: 0.95rem; margin-bottom: 1.5rem;"></p>
