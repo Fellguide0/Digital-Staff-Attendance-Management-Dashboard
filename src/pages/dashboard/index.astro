@@ -163,12 +163,17 @@ const { data: movimientos } = await supabase
                 </tr>
               </thead>
               <tbody>
-                {movimientos.map((m) => {
+              {movimientos.map((m) => {
                   const date = new Date(m.timestamp);
                   return (
                     <tr>
                       <td style="color: var(--gris); font-weight: 500;">
-                        {date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                        {date.toLocaleTimeString('es-MX', { 
+                          timeZone: 'America/Mexico_City', 
+                          hour: '2-digit', 
+                          minute: '2-digit',
+                          hour12: true 
+                        })}
                       </td>
                       <td style="font-weight: 500;">{(m.profesores as any)?.nombre}</td>
                       <td>{(m.profesores as any)?.grado_grupo || '—'}</td>
