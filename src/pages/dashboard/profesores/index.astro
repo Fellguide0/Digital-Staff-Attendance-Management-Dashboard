@@ -2,10 +2,11 @@
 // src/pages/dashboard/profesores/index.astro
 import { supabase } from "../../../lib/supabase";
 
-// Traemos a TODOS los profesores ordenados por número de lista
+// Se ordena primero por grado_grupo ascendentemente y luego por numero_lista
 const { data: profesores } = await supabase
   .from('profesores')
   .select('*')
+  .order('grado_grupo', { ascending: true })
   .order('numero_lista', { ascending: true });
 
 const hoy = new Date().toLocaleDateString('es-MX', {
@@ -72,10 +73,14 @@ const hoy = new Date().toLocaleDateString('es-MX', {
         background: #fff;
         border-radius: 14px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-        overflow: hidden;
+        overflow-x: auto; 
       }
 
-      table { width: 100%; border-collapse: collapse; }
+      table { 
+        width: 100%; 
+        border-collapse: collapse; 
+        min-width: 950px; 
+      }
 
       th {
         text-align: left;
@@ -111,8 +116,12 @@ const hoy = new Date().toLocaleDateString('es-MX', {
       .badge-inactivo { background: var(--rojo-claro); color: var(--rojo); }
 
       /* Estilos para el CRUD y Modal */
-      .header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+      .header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 1rem; }
       .titulo-seccion { font-family: 'DM Serif Display', serif; font-size: 1.6rem; color: var(--verde); }
+
+      .buscador-container { display: flex; gap: 1rem; align-items: center; flex: 1; justify-content: flex-end; }
+      .input-buscador { padding: 0.6rem 1rem; border: 1px solid #d1d5db; border-radius: 6px; width: 100%; max-width: 350px; font-family: inherit; font-size: 0.9rem; outline: none; transition: border-color 0.2s; }
+      .input-buscador:focus { border-color: var(--verde); }
 
       .btn-primario {
         background: var(--verde);
@@ -125,6 +134,7 @@ const hoy = new Date().toLocaleDateString('es-MX', {
         cursor: pointer;
         transition: background 0.2s;
         font-family: inherit;
+        white-space: nowrap;
       }
       .btn-primario:hover { background: var(--verde-med); }
       .btn-primario:disabled { opacity: 0.7; cursor: not-allowed; }
@@ -148,7 +158,7 @@ const hoy = new Date().toLocaleDateString('es-MX', {
          cursor: pointer;
          font-size: 0.85rem;
          font-weight: 500;
-         padding: 0.35rem 0.6rem;
+         padding: 0.35rem 0.6...;
          border-radius: 4px;
          transition: background 0.2s;
       }
@@ -158,6 +168,10 @@ const hoy = new Date().toLocaleDateString('es-MX', {
       .btn-desactivar:hover { background: var(--rojo-claro); }
       .btn-reactivar { color: var(--verde); }
       .btn-reactivar:hover { background: var(--verde-claro); }
+
+      td:last-child {
+        white-space: nowrap;
+      }
 
       dialog {
         margin: auto;
@@ -202,7 +216,10 @@ const hoy = new Date().toLocaleDateString('es-MX', {
     <main>
       <div class="header-actions">
         <h2 class="titulo-seccion">Gestión de Personal</h2>
-        <button id="btn-abrir-modal" class="btn-primario">+ Agregar Docente</button>
+        <div class="buscador-container">
+          <input type="text" id="buscador-docentes" class="input-buscador" placeholder="🔍 Buscar por nombre, grado o correo...">
+          <button id="btn-abrir-modal" class="btn-primario">+ Agregar Personal</button>
+        </div>
       </div>
 
       <div class="tabla-card">
@@ -212,17 +229,24 @@ const hoy = new Date().toLocaleDateString('es-MX', {
               <th>No.</th>
               <th>Nombre Completo</th>
               <th>Correo SEP</th>
-              <th>Grado/Grupo</th>
+              <th>Grado/Cargo</th>
               <th>Turno</th>
               <th>Estado</th>
               <th style="text-align: right;">Acciones</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="tabla-body">
             {profesores?.map((profe) => (
               <tr style={`opacity: ${profe.activo ? '1' : '0.5'};`}>
                 <td style="color: var(--gris); font-weight: 500;">{profe.numero_lista}</td>
-                <td style="font-weight: 500;">{profe.nombre}</td>
+                <td style="font-weight: 500;">
+                  {profe.nombre}
+                  {profe.es_guardia && (
+                    <span class="badge" style="background: var(--naranja-claro); color: var(--naranja); margin-left: 0.5rem; font-size: 0.65rem; padding: 0.15rem 0.4rem;">
+                      De Guardia
+                    </span>
+                  )}
+                </td>
                 <td style="color: var(--gris);">{profe.email}</td>
                 <td>{profe.grado_grupo}</td>
                 <td style="text-transform: capitalize;">{profe.turno}</td>
@@ -234,7 +258,13 @@ const hoy = new Date().toLocaleDateString('es-MX', {
                   )}
                 </td>
                 <td style="text-align: right; display: flex; gap: 0.25rem; justify-content: flex-end;">
-                  <button class="btn-accion btn-editar" data-id={profe.id}>Editar</button>
+                  <button 
+                    class="btn-accion btn-editar" 
+                    data-id={profe.id}
+                    data-guardia={profe.es_guardia ? "true" : "false"}
+                  >
+                    Editar
+                  </button>
                   {profe.activo ? (
                     <button class="btn-accion btn-desactivar" data-id={profe.id}>Baja</button>
                   ) : (
@@ -244,8 +274,8 @@ const hoy = new Date().toLocaleDateString('es-MX', {
               </tr>
             ))}
             {(!profesores || profesores.length === 0) && (
-              <tr>
-                <td colspan="7" style="text-align: center; padding: 3rem; color: var(--gris);">No hay docentes registrados todavía.</td>
+              <tr id="fila-vacia">
+                <td colspan="7" style="text-align: center; padding: 3rem; color: var(--gris);">No hay personal registrado todavía.</td>
               </tr>
             )}
           </tbody>
@@ -253,9 +283,8 @@ const hoy = new Date().toLocaleDateString('es-MX', {
       </div>
     </main>
 
-    <!-- MODAL DE CREACIÓN -->
     <dialog id="modal-agregar-profesor">
-      <h2 class="modal-titulo">Alta de Nuevo Docente</h2>
+      <h2 class="modal-titulo">Alta de Nuevo Personal</h2>
       
       <form id="form-agregar-profesor" class="form-grid">
         <div class="form-group">
@@ -266,6 +295,7 @@ const hoy = new Date().toLocaleDateString('es-MX', {
           <label class="form-label">Correo Institucional (SEP)</label>
           <input type="email" name="email" class="form-input" required placeholder="ejemplo@sep.gob.mx">
         </div>
+        
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Turno</label>
@@ -279,10 +309,27 @@ const hoy = new Date().toLocaleDateString('es-MX', {
             <input type="number" name="numero_lista" class="form-input" required min="1" max="99" placeholder="Ej. 12">
           </div>
         </div>
+
         <div class="form-group">
-          <label class="form-label">Grado y Grupo</label>
-          <input type="text" name="grado_grupo" class="form-input" required pattern="^[1-6][A-Z]$" title="Debe ser un número del 1 al 6 seguido de una letra mayúscula (ej. 3A)" placeholder="Ej. 5A">
+          <label class="form-label">Cargo / Función</label>
+          <select id="select-cargo-add" class="form-select">
+            <option value="Docente">Docente frente a grupo</option>
+            <option value="Directora">Directora</option>
+            <option value="Administrativo Especializado">Administrativo Especializado</option>
+            <option value="Asistencia de Servicios">Asistencia de Servicios</option>
+          </select>
         </div>
+
+        <div class="form-group" id="container-grado-add">
+          <label class="form-label">Grado y Grupo</label>
+          <input type="text" id="input-grado-add" name="grado_grupo" class="form-input" required placeholder="Ej. 5A">
+        </div>
+
+        <div class="form-group" style="flex-direction: row; align-items: center; gap: 0.5rem; margin-top: 0.2rem;">
+          <input type="checkbox" id="input-guardia-add" name="es_guardia" style="width: 16px; height: 16px; accent-color: var(--verde);">
+          <label for="input-guardia-add" class="form-label" style="text-transform: none; cursor: pointer; font-weight: 500;">Asignar como Docente de Guardia (Segundo al mando)</label>
+        </div>
+
         <div id="mensaje-error" class="error-mensaje"></div>
         <div class="form-actions">
           <button type="button" id="btn-cerrar-modal" class="btn-secundario">Cancelar</button>
@@ -291,9 +338,8 @@ const hoy = new Date().toLocaleDateString('es-MX', {
       </form>
     </dialog>
 
-    <!-- MODAL DE EDICIÓN -->
     <dialog id="modal-editar-profesor">
-      <h2 class="modal-titulo">Editar Docente</h2>
+      <h2 class="modal-titulo">Editar Personal</h2>
       
       <form id="form-editar-profesor" class="form-grid">
         <input type="hidden" id="edit-id" name="id">
@@ -301,6 +347,7 @@ const hoy = new Date().toLocaleDateString('es-MX', {
           <label class="form-label">Nombre Completo</label>
           <input type="text" id="edit-nombre" name="nombre" class="form-input" required minlength="2">
         </div>
+        
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Turno</label>
@@ -314,10 +361,27 @@ const hoy = new Date().toLocaleDateString('es-MX', {
             <input type="number" id="edit-numero" name="numero_lista" class="form-input" required min="1" max="99">
           </div>
         </div>
+
         <div class="form-group">
-          <label class="form-label">Grado y Grupo</label>
-          <input type="text" id="edit-grado" name="grado_grupo" class="form-input" required pattern="^[1-6][A-Z]$">
+          <label class="form-label">Cargo / Función</label>
+          <select id="select-cargo-edit" class="form-select">
+            <option value="Docente">Docente frente a grupo</option>
+            <option value="Directora">Directora</option>
+            <option value="Administrativo Especializado">Administrativo Especializado</option>
+            <option value="Asistencia de Servicios">Asistencia de Servicios</option>
+          </select>
         </div>
+
+        <div class="form-group" id="container-grado-edit">
+          <label class="form-label">Grado y Grupo</label>
+          <input type="text" id="edit-grado" name="grado_grupo" class="form-input" required>
+        </div>
+
+        <div class="form-group" style="flex-direction: row; align-items: center; gap: 0.5rem; margin-top: 0.2rem;">
+          <input type="checkbox" id="edit-guardia" name="es_guardia" style="width: 16px; height: 16px; accent-color: var(--verde);">
+          <label for="edit-guardia" class="form-label" style="text-transform: none; cursor: pointer; font-weight: 500;">Docente de Guardia (Segundo al mando)</label>
+        </div>
+
         <div id="mensaje-error-edit" class="error-mensaje"></div>
         <div class="form-actions">
           <button type="button" id="btn-cerrar-edit" class="btn-secundario">Cancelar</button>
@@ -326,7 +390,6 @@ const hoy = new Date().toLocaleDateString('es-MX', {
       </form>
     </dialog>
 
-    <!-- MODALES DE UI PERSONALIZADA (Confirmación y Alerta) -->
     <dialog id="modal-confirmacion" style="max-width: 400px; text-align: center;">
       <h2 id="confirm-titulo" class="modal-titulo" style="margin-bottom: 1rem; font-size: 1.3rem;">Confirmación</h2>
       <p id="confirm-mensaje" style="color: var(--gris); font-size: 0.95rem; margin-bottom: 1.5rem;"></p>
@@ -344,50 +407,92 @@ const hoy = new Date().toLocaleDateString('es-MX', {
       </div>
     </dialog>
 
-    <script>
+    <script is:inline>
+      // ==========================================
+      // LÓGICA DE BARRA DE BÚSQUEDA EN TIEMPO REAL
+      // ==========================================
+      const buscador = document.getElementById('buscador-docentes');
+      buscador?.addEventListener('input', (e) => {
+        const termino = e.target.value.toLowerCase();
+        const filas = document.querySelectorAll('#tabla-body tr:not(#fila-vacia)');
+        
+        filas.forEach(fila => {
+          const textoFila = fila.textContent?.toLowerCase() || '';
+          if (textoFila.includes(termino)) {
+            fila.style.display = '';
+          } else {
+            fila.style.display = 'none';
+          }
+        });
+      });
+
+      // ==========================================
+      // LÓGICA DE CARGOS Y FUNCIONES (Add & Edit)
+      // ==========================================
+      function configurarToggleCargo(selectId, containerId, inputId) {
+        const selectCargo = document.getElementById(selectId);
+        const containerGrado = document.getElementById(containerId);
+        const inputGrado = document.getElementById(inputId);
+
+        selectCargo?.addEventListener('change', () => {
+          if (selectCargo.value === 'Docente') {
+            containerGrado.style.display = 'flex';
+            if (inputGrado.value !== '' && !/^[1-6][A-Z]$/.test(inputGrado.value)) {
+              inputGrado.value = ''; 
+            }
+          } else {
+            containerGrado.style.display = 'none';
+            inputGrado.value = selectCargo.value;
+          }
+        });
+      }
+
+      configurarToggleCargo('select-cargo-add', 'container-grado-add', 'input-grado-add');
+      configurarToggleCargo('select-cargo-edit', 'container-grado-edit', 'edit-grado');
+
       // ==========================================
       // FUNCIONES HELPERS PARA MODALES CUSTOM
       // ==========================================
-      const modalConfirmacion = document.getElementById('modal-confirmacion') as HTMLDialogElement;
+      const modalConfirmacion = document.getElementById('modal-confirmacion');
       const confirmTitulo = document.getElementById('confirm-titulo');
       const confirmMensaje = document.getElementById('confirm-mensaje');
       const btnConfirmCancelar = document.getElementById('btn-confirm-cancelar');
       const btnConfirmAceptar = document.getElementById('btn-confirm-aceptar');
 
-      const modalAlerta = document.getElementById('modal-alerta') as HTMLDialogElement;
+      const modalAlerta = document.getElementById('modal-alerta');
       const alertaMensaje = document.getElementById('alerta-mensaje');
       const btnAlertaAceptar = document.getElementById('btn-alerta-aceptar');
 
-      function mostrarAlerta(mensaje: string) {
-        alertaMensaje!.textContent = mensaje;
+      function mostrarAlerta(mensaje) {
+        alertaMensaje.textContent = mensaje;
         modalAlerta.showModal();
-        return new Promise<void>(resolve => {
-          btnAlertaAceptar!.onclick = () => {
+        return new Promise(resolve => {
+          btnAlertaAceptar.onclick = () => {
             modalAlerta.close();
             resolve();
           };
         });
       }
 
-      function mostrarConfirmacion(titulo: string, mensaje: string, textoBoton: string, esPeligro = false) {
-        confirmTitulo!.textContent = titulo;
-        confirmMensaje!.textContent = mensaje;
-        btnConfirmAceptar!.textContent = textoBoton;
+      function mostrarConfirmacion(titulo, mensaje, textoBoton, esPeligro = false) {
+        confirmTitulo.textContent = titulo;
+        confirmMensaje.textContent = mensaje;
+        btnConfirmAceptar.textContent = textoBoton;
         
         if (esPeligro) {
-          btnConfirmAceptar!.style.backgroundColor = 'var(--rojo)';
+          btnConfirmAceptar.style.backgroundColor = 'var(--rojo)';
         } else {
-          btnConfirmAceptar!.style.backgroundColor = 'var(--verde)';
+          btnConfirmAceptar.style.backgroundColor = 'var(--verde)';
         }
 
         modalConfirmacion.showModal();
 
-        return new Promise<boolean>(resolve => {
-          btnConfirmCancelar!.onclick = () => {
+        return new Promise(resolve => {
+          btnConfirmCancelar.onclick = () => {
             modalConfirmacion.close();
             resolve(false);
           };
-          btnConfirmAceptar!.onclick = () => {
+          btnConfirmAceptar.onclick = () => {
             modalConfirmacion.close();
             resolve(true);
           };
@@ -397,14 +502,19 @@ const hoy = new Date().toLocaleDateString('es-MX', {
       // ==========================================
       // LÓGICA DE CREACIÓN (POST)
       // ==========================================
-      const modal = document.getElementById('modal-agregar-profesor') as HTMLDialogElement;
+      const modal = document.getElementById('modal-agregar-profesor');
       const btnAbrir = document.getElementById('btn-abrir-modal');
       const btnCerrar = document.getElementById('btn-cerrar-modal');
-      const form = document.getElementById('form-agregar-profesor') as HTMLFormElement;
+      const form = document.getElementById('form-agregar-profesor');
       const mensajeError = document.getElementById('mensaje-error');
-      const btnGuardar = document.getElementById('btn-guardar') as HTMLButtonElement;
+      const btnGuardar = document.getElementById('btn-guardar');
 
-      btnAbrir?.addEventListener('click', () => modal.showModal());
+      btnAbrir?.addEventListener('click', () => {
+        document.getElementById('select-cargo-add').value = 'Docente';
+        document.getElementById('container-grado-add').style.display = 'flex';
+        document.getElementById('input-guardia-add').checked = false;
+        modal.showModal();
+      });
 
       btnCerrar?.addEventListener('click', () => {
         modal.close();
@@ -422,6 +532,9 @@ const hoy = new Date().toLocaleDateString('es-MX', {
         const formData = new FormData(form);
         const data = Object.fromEntries(formData.entries());
         data.numero_lista = Number(data.numero_lista);
+        
+        // Mapeo booleano explícito para el Checkbox
+        data.es_guardia = formData.has('es_guardia');
 
         try {
           const res = await fetch('/api/profesores', {
@@ -437,12 +550,12 @@ const hoy = new Date().toLocaleDateString('es-MX', {
             form.reset();
             window.location.reload(); 
           } else {
-            mensajeError!.textContent = result.error || 'Error al guardar el registro.';
-            mensajeError!.classList.add('visible');
+            mensajeError.textContent = result.error || 'Error al guardar el registro.';
+            mensajeError.classList.add('visible');
           }
         } catch (err) {
-          mensajeError!.textContent = 'Error de conexión con el servidor.';
-          mensajeError!.classList.add('visible');
+          sidebar.textContent = 'Error de conexión con el servidor.';
+          mensajeError.classList.add('visible');
         } finally {
           btnGuardar.disabled = false;
           btnGuardar.textContent = 'Guardar';
@@ -455,17 +568,17 @@ const hoy = new Date().toLocaleDateString('es-MX', {
       const botonesBaja = document.querySelectorAll('.btn-desactivar');
       botonesBaja.forEach(btn => {
         btn.addEventListener('click', async (e) => {
-          const id = (e.target as HTMLButtonElement).getAttribute('data-id');
+          const id = e.target.getAttribute('data-id');
           
           const confirmado = await mostrarConfirmacion(
             'Dar de baja',
-            '¿Estás seguro de que deseas dar de baja a este docente? Su cuenta quedará inactiva y no podrá registrar asistencia.',
+            '¿Estás seguro de que deseas dar de baja a este personal? Su cuenta quedará inactiva y no podrá registrar asistencia.',
             'Sí, dar de baja',
             true
           );
           
           if (confirmado) {
-            const boton = e.target as HTMLButtonElement;
+            const boton = e.target;
             boton.textContent = 'Procesando...';
             boton.disabled = true;
 
@@ -498,17 +611,17 @@ const hoy = new Date().toLocaleDateString('es-MX', {
       const botonesReactivar = document.querySelectorAll('.btn-reactivar');
       botonesReactivar.forEach(btn => {
         btn.addEventListener('click', async (e) => {
-          const id = (e.target as HTMLButtonElement).getAttribute('data-id');
+          const id = e.target.getAttribute('data-id');
           
           const confirmado = await mostrarConfirmacion(
-            'Reactivar docente',
-            'Este docente volverá a estar activo y podrá registrar asistencia nuevamente.',
+            'Reactivar personal',
+            'Este elemento volverá a estar activo y podrá registrar asistencia nuevamente.',
             'Reactivar',
             false
           );
           
           if (confirmado) {
-            const boton = e.target as HTMLButtonElement;
+            const boton = e.target;
             boton.textContent = 'Procesando...';
             boton.disabled = true;
 
@@ -538,11 +651,11 @@ const hoy = new Date().toLocaleDateString('es-MX', {
       // ==========================================
       // LÓGICA DE EDICIÓN (PATCH)
       // ==========================================
-      const modalEdit = document.getElementById('modal-editar-profesor') as HTMLDialogElement;
+      const modalEdit = document.getElementById('modal-editar-profesor');
       const btnCerrarEdit = document.getElementById('btn-cerrar-edit');
-      const formEdit = document.getElementById('form-editar-profesor') as HTMLFormElement;
+      const formEdit = document.getElementById('form-editar-profesor');
       const msgErrorEdit = document.getElementById('mensaje-error-edit');
-      const btnGuardarEdit = document.getElementById('btn-guardar-edit') as HTMLButtonElement;
+      const btnGuardarEdit = document.getElementById('btn-guardar-edit');
 
       btnCerrarEdit?.addEventListener('click', () => {
         modalEdit.close();
@@ -552,21 +665,36 @@ const hoy = new Date().toLocaleDateString('es-MX', {
       const botonesEditar = document.querySelectorAll('.btn-editar');
       botonesEditar.forEach(btn => {
         btn.addEventListener('click', (e) => {
-          const id = (e.target as HTMLButtonElement).getAttribute('data-id');
-          const fila = (e.target as HTMLElement).closest('tr');
+          const id = e.target.getAttribute('data-id');
+          const esGuardia = e.target.getAttribute('data-guardia') === 'true';
+          const fila = e.target.closest('tr');
           
           if (fila) {
             const columnas = fila.querySelectorAll('td');
             const numeroLista = columnas[0].innerText.trim();
-            const nombre = columnas[1].innerText.trim();
+            const nombre = columnas[1].innerText.split('\n')[0].trim(); // Evita jalar el texto del badge
             const gradoGrupo = columnas[3].innerText.trim();
             const turno = columnas[4].innerText.trim().toLowerCase();
 
-            (document.getElementById('edit-id') as HTMLInputElement).value = id || '';
-            (document.getElementById('edit-nombre') as HTMLInputElement).value = nombre;
-            (document.getElementById('edit-numero') as HTMLInputElement).value = numeroLista;
-            (document.getElementById('edit-grado') as HTMLInputElement).value = gradoGrupo;
-            (document.getElementById('edit-turno') as HTMLSelectElement).value = turno;
+            document.getElementById('edit-id').value = id || '';
+            document.getElementById('edit-nombre').value = nombre;
+            document.getElementById('edit-numero').value = numeroLista;
+            document.getElementById('edit-turno').value = turno;
+            document.getElementById('edit-guardia').checked = esGuardia;
+            
+            const selectCargoEdit = document.getElementById('select-cargo-edit');
+            const containerGradoEdit = document.getElementById('container-grado-edit');
+            const inputGradoEdit = document.getElementById('edit-grado');
+            
+            inputGradoEdit.value = gradoGrupo;
+
+            if (['Directora', 'Administrativo Especializado', 'Asistencia de Servicios'].includes(gradoGrupo)) {
+              selectCargoEdit.value = gradoGrupo;
+              containerGradoEdit.style.display = 'none';
+            } else {
+              selectCargoEdit.value = 'Docente';
+              containerGradoEdit.style.display = 'flex';
+            }
 
             modalEdit.showModal();
           }
@@ -586,6 +714,9 @@ const hoy = new Date().toLocaleDateString('es-MX', {
         
         delete data.id; 
         data.numero_lista = Number(data.numero_lista);
+        
+        // Mapeo booleano explícito para el Checkbox de edición
+        data.es_guardia = formData.has('es_guardia');
 
         try {
           const res = await fetch(`/api/profesores?id=${id}`, {
@@ -600,12 +731,12 @@ const hoy = new Date().toLocaleDateString('es-MX', {
             modalEdit.close();
             window.location.reload(); 
           } else {
-            msgErrorEdit!.textContent = result.error || 'Error al actualizar el registro.';
-            msgErrorEdit!.classList.add('visible');
+            msgErrorEdit.textContent = result.error || 'Error al actualizar el registro.';
+            msgErrorEdit.classList.add('visible');
           }
         } catch (err) {
-          msgErrorEdit!.textContent = 'Error de conexión con el servidor.';
-          msgErrorEdit!.classList.add('visible');
+          msgErrorEdit.textContent = 'Error de conexión con el servidor.';
+          msgErrorEdit.classList.add('visible');
         } finally {
           btnGuardarEdit.disabled = false;
           btnGuardarEdit.textContent = 'Guardar Cambios';
